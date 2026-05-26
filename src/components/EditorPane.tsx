@@ -41,6 +41,7 @@ export function EditorPane({
   onBackToList
 }: EditorPaneProps) {
   const editorRef = useRef<MDXEditorMethods>(null);
+  const editorShellRef = useRef<HTMLElement>(null);
   const previousNoteIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export function EditorPane({
     if (previousNoteIdRef.current !== note.id) {
       editorRef.current?.setMarkdown(markdown);
       previousNoteIdRef.current = note.id;
+      window.requestAnimationFrame(focusEditorStart);
     }
   }, [markdown, note]);
 
@@ -92,14 +94,13 @@ export function EditorPane({
         </div>
       ) : null}
 
-      <section className="editor-shell" onBlurCapture={onFlush} onClickCapture={handleTaskClick}>
+      <section ref={editorShellRef} className="editor-shell" onBlurCapture={onFlush} onClickCapture={handleTaskClick}>
         <MDXEditor
           ref={editorRef}
           markdown={markdown}
           onChange={onMarkdownChange}
           plugins={editorPlugins}
           contentEditableClassName="jot-editor"
-          placeholder="ここに書き始める"
         />
       </section>
     </main>
@@ -130,5 +131,22 @@ export function EditorPane({
     const nextMarkdown = normalizeSupportedMarkdown(toggleTaskAtIndex(markdown, taskIndex));
     editorRef.current?.setMarkdown(nextMarkdown);
     onMarkdownChange(nextMarkdown);
+  }
+
+  function focusEditorStart() {
+    const editor = editorShellRef.current?.querySelector('[contenteditable="true"]');
+    if (!(editor instanceof HTMLElement)) {
+      return;
+    }
+
+    editor.focus();
+
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(true);
+
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
   }
 }
