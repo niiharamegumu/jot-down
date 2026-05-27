@@ -1,12 +1,7 @@
 :root {
   color-scheme: light dark;
   font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Hiragino Sans",
-    "Yu Gothic",
-    "Yu Gothic UI",
-    sans-serif;
+    -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Yu Gothic UI", sans-serif;
   color: #262626;
   background: #f5f5f5;
   font-synthesis: none;

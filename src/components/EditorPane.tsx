@@ -74,7 +74,12 @@ export function EditorPane({
   return (
     <main className="editor-pane" aria-label="選択中のNote">
       <header className="editor-toolbar">
-        <button className="back-button" type="button" onClick={onBackToList} aria-label="Note一覧へ戻る">
+        <button
+          className="back-button"
+          type="button"
+          onClick={onBackToList}
+          aria-label="Note一覧へ戻る"
+        >
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="M15 5l-7 7 7 7" />
           </svg>
@@ -82,7 +87,12 @@ export function EditorPane({
         <p className="editor-toolbar__updated-at">
           {updatedAt ? updatedAtFormatter.format(new Date(updatedAt)) : ''}
         </p>
-        <button className="delete-button" type="button" onClick={onDeleteNote} aria-label="Noteを削除">
+        <button
+          className="delete-button"
+          type="button"
+          onClick={onDeleteNote}
+          aria-label="Noteを削除"
+        >
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="M3 6h18" />
             <path d="M8 6V4h8v2" />
@@ -109,7 +119,12 @@ export function EditorPane({
         </div>
       ) : null}
 
-      <section ref={editorShellRef} className="editor-shell" onBlurCapture={onFlush} onClickCapture={handleTaskClick}>
+      <section
+        ref={editorShellRef}
+        className="editor-shell"
+        onBlurCapture={onFlush}
+        onClickCapture={handleTaskClick}
+      >
         <MDXEditor
           ref={editorRef}
           markdown={markdown}
@@ -134,7 +149,9 @@ export function EditorPane({
       return;
     }
 
-    const checkboxes = Array.from(event.currentTarget.querySelectorAll('[role="checkbox"][aria-checked]'));
+    const checkboxes = Array.from(
+      event.currentTarget.querySelectorAll('[role="checkbox"][aria-checked]')
+    );
     const taskIndex = checkboxes.indexOf(checkbox);
     if (taskIndex < 0) {
       return;

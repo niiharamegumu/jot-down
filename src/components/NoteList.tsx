@@ -28,7 +28,12 @@ export function NoteList({
   return (
     <aside className="note-list" aria-label="Notes">
       <div className="note-list__header">
-        <button className="icon-button" type="button" onClick={onCreateNote} aria-label="新しいNoteを作成">
+        <button
+          className="icon-button"
+          type="button"
+          onClick={onCreateNote}
+          aria-label="新しいNoteを作成"
+        >
           +
         </button>
       </div>
@@ -59,7 +64,9 @@ export function NoteList({
               onClick={() => onSelectNote(note.id)}
             >
               <span className="note-card__title">{title}</span>
-              <span className="note-card__meta">{dateFormatter.format(new Date(note.updatedAt))}</span>
+              <span className="note-card__meta">
+                {dateFormatter.format(new Date(note.updatedAt))}
+              </span>
               <span className="note-card__snippet">{snippet}</span>
             </button>
           );

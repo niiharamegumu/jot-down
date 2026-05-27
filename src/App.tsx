@@ -47,7 +47,9 @@ export function App() {
   });
 
   const selectedNote = notes.find((note) => note.id === selectedNoteId) ?? null;
-  const visibleNotes = sortNotesByUpdatedTime(notes).filter((note) => matchesNoteSearch(note, query));
+  const visibleNotes = sortNotesByUpdatedTime(notes).filter((note) =>
+    matchesNoteSearch(note, query)
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +57,8 @@ export function App() {
     async function boot() {
       try {
         const loadedNotes = await loadNotes();
-        const initialNotes = loadedNotes.length > 0 ? loadedNotes : [createNote(starterMarkdown, starterNoteId)];
+        const initialNotes =
+          loadedNotes.length > 0 ? loadedNotes : [createNote(starterMarkdown, starterNoteId)];
 
         if (loadedNotes.length === 0) {
           await putNote(initialNotes[0]);
@@ -115,7 +118,9 @@ export function App() {
 
   function updateNotes(nextNote: Note) {
     setNotes((currentNotes) =>
-      sortNotesByUpdatedTime(currentNotes.map((note) => (note.id === nextNote.id ? nextNote : note)))
+      sortNotesByUpdatedTime(
+        currentNotes.map((note) => (note.id === nextNote.id ? nextNote : note))
+      )
     );
   }
 
@@ -191,7 +196,9 @@ export function App() {
 
     try {
       await deleteNote(selectedNote.id);
-      const remainingNotes = sortNotesByUpdatedTime(notes.filter((note) => note.id !== selectedNote.id));
+      const remainingNotes = sortNotesByUpdatedTime(
+        notes.filter((note) => note.id !== selectedNote.id)
+      );
       const fallbackNotes = remainingNotes.length > 0 ? remainingNotes : [createNote()];
 
       if (remainingNotes.length === 0) {
@@ -374,5 +381,8 @@ function loadSidebarWidth(): number {
 
 function isRunningAsInstalledPwa(): boolean {
   const standaloneNavigator = navigator as Navigator & { standalone?: boolean };
-  return window.matchMedia('(display-mode: standalone)').matches || standaloneNavigator.standalone === true;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    standaloneNavigator.standalone === true
+  );
 }

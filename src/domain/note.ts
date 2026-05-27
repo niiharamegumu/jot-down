@@ -84,7 +84,10 @@ export function toggleTaskAtIndex(markdown: string, taskIndex: number): string {
 
       const [, indent, bullet, marker, trailingSpace] = match;
       const nextMarker = marker.toLowerCase() === 'x' ? ' ' : 'x';
-      return line.replace(/^(\s*)([-*])\s+\[( |x|X)\](\s+)/, `${indent}${bullet} [${nextMarker}]${trailingSpace}`);
+      return line.replace(
+        /^(\s*)([-*])\s+\[( |x|X)\](\s+)/,
+        `${indent}${bullet} [${nextMarker}]${trailingSpace}`
+      );
     })
     .join('\n');
 }

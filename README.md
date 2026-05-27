@@ -37,6 +37,15 @@ The app is installable as a PWA through the browser's standard install action wh
 
 When an installed PWA detects a newly available app version, it shows a persistent update bar. The update is applied only after the user chooses to update, and the active note is saved before the app reloads.
 
+## Development Checks
+
+Install dependencies with `npm install` to also register the repository's Git hooks.
+
+- `npm run format` formats tracked source and documentation files with Biome.
+- `npm run lint` runs ESLint, including React Hooks and React Refresh checks.
+- `npm run typecheck` runs TypeScript project references with `tsc -b`.
+- `npm run check` runs format verification, lint, and type checking. The same check runs before `git push`.
+
 ## Out Of Scope Initially
 
 - User accounts.
