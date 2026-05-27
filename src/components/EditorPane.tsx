@@ -131,7 +131,7 @@ export function EditorPane({
         ref={editorShellRef}
         className="editor-shell"
         onBlurCapture={onFlush}
-        onClickCapture={handleTaskClick}
+        onClickCapture={handleEditorClick}
       >
         <MDXEditor
           ref={editorRef}
@@ -143,6 +143,27 @@ export function EditorPane({
       </section>
     </main>
   );
+
+  function handleEditorClick(event: MouseEvent<HTMLElement>) {
+    if (openClickedLink(event)) {
+      return;
+    }
+
+    handleTaskClick(event);
+  }
+
+  function openClickedLink(event: MouseEvent<HTMLElement>): boolean {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const link = target?.closest('a[href]');
+    if (!(link instanceof HTMLAnchorElement)) {
+      return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    window.open(link.href, '_blank', 'noopener,noreferrer');
+    return true;
+  }
 
   function handleTaskClick(event: MouseEvent<HTMLElement>) {
     const target = event.target instanceof HTMLElement ? event.target : null;

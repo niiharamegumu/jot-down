@@ -32,8 +32,17 @@ vi.mock('@mdxeditor/editor', async () => {
         >
           {markdown.split('\n').map((line, index) => {
             const task = line.match(/^\s*[-*]\s+\[( |x|X)\]\s+(.+)$/);
+            const link = line.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
 
             if (!task) {
+              if (link) {
+                return (
+                  <p key={`${line}-${index}`}>
+                    <a href={link[2]}>{link[1]}</a>
+                  </p>
+                );
+              }
+
               return <p key={`${line}-${index}`}>{line}</p>;
             }
 
@@ -121,6 +130,19 @@ describe('EditorPane', () => {
 
     expect(mockSetMarkdown).not.toHaveBeenCalled();
     expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] aa');
+  });
+
+  it('opens clicked links outside the editor without changing note Markdown', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const onMarkdownChange = vi.fn();
+    renderEditor({ markdown: '[OpenAI](https://openai.com)', onMarkdownChange });
+
+    fireEvent.click(screen.getByRole('link', { name: 'OpenAI' }));
+
+    expect(open).toHaveBeenCalledWith('https://openai.com/', '_blank', 'noopener,noreferrer');
+    expect(onMarkdownChange).not.toHaveBeenCalled();
+
+    open.mockRestore();
   });
 
   it('flushes note changes when editing focus leaves the editor', () => {
