@@ -19,6 +19,8 @@ vi.mock('@mdxeditor/editor', async () => {
 
   return {
     headingsPlugin: vi.fn(),
+    linkDialogPlugin: vi.fn(),
+    linkPlugin: vi.fn(),
     listsPlugin: vi.fn(),
     markdownShortcutPlugin: vi.fn(),
     MDXEditor: React.forwardRef(function MockMDXEditor(

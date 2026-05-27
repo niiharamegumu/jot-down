@@ -99,6 +99,8 @@ function stripMarkdownChrome(value: string): string {
     .replace(/^\s*\*\s+\[(?: |x|X)\]\s+/, '')
     .replace(/^\s*-\s+/, '')
     .replace(/^\s*\*\s+/, '')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\s+/g, ' ')
     .trim();
 }
