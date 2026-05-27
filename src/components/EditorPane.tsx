@@ -128,7 +128,7 @@ export function EditorPane({
         <MDXEditor
           ref={editorRef}
           markdown={markdown}
-          onChange={onMarkdownChange}
+          onChange={handleMarkdownChange}
           plugins={editorPlugins}
           contentEditableClassName="jot-editor"
         />
@@ -163,6 +163,10 @@ export function EditorPane({
     const nextMarkdown = normalizeSupportedMarkdown(toggleTaskAtIndex(markdown, taskIndex));
     editorRef.current?.setMarkdown(nextMarkdown);
     onMarkdownChange(nextMarkdown);
+  }
+
+  function handleMarkdownChange(nextMarkdown: string) {
+    onMarkdownChange(normalizeSupportedMarkdown(nextMarkdown));
   }
 
   function focusEditorStart() {

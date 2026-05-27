@@ -17,7 +17,7 @@ The browser-resident place where notes are kept for offline use on the current d
 _Avoid_: Local folder, cloud sync, file vault, account, import/export
 
 **Markdown live editing**:
-A single editing surface where Markdown text remains the source of truth while task markers and headings are visually structured in place as the user types. Editing a focused block must preserve the block's visual scale and layout so cursor placement does not cause distracting typography or position shifts; supported structures come from typed Markdown shapes rather than a separate block-type control, and list-like structures continue naturally on Enter until the user exits with an empty item.
+A single editing surface where Markdown text remains the source of truth while task markers and headings are visually structured in place as the user types. Editing behavior follows the Markdown editor's native list and task semantics rather than preserving app-specific empty task states, while focused blocks must keep their visual scale and layout stable enough that cursor placement does not cause distracting typography or position shifts.
 _Avoid_: Separate preview, rendered-only document, edit/preview mode, layout-shifting focus state, block-type menu
 
 **Note**:
