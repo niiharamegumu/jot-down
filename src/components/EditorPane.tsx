@@ -1,5 +1,7 @@
 import {
   headingsPlugin,
+  linkDialogPlugin,
+  linkPlugin,
   listsPlugin,
   markdownShortcutPlugin,
   MDXEditor,
@@ -23,7 +25,13 @@ type EditorPaneProps = {
   onBackToList: () => void;
 };
 
-const editorPlugins = [headingsPlugin(), listsPlugin(), markdownShortcutPlugin()];
+const editorPlugins = [
+  headingsPlugin(),
+  listsPlugin(),
+  linkPlugin(),
+  linkDialogPlugin(),
+  markdownShortcutPlugin()
+];
 const taskCheckboxHitAreaWidthPx = 24;
 const updatedAtFormatter = new Intl.DateTimeFormat('ja-JP', {
   year: 'numeric',

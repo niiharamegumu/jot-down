@@ -53,8 +53,16 @@ The expectation that the app's note creation, editing, checking, searching, and 
 _Avoid_: App-shell-only offline mode
 
 **Supported Markdown**:
-The Markdown shapes treated as first-class in the app: headings, paragraphs, `-` bullet lists, and checkable task items. First-class structures should carry matching visual and accessible meaning. Other Markdown-like text may be kept in notes, but is not treated as a first-class structure.
+The Markdown shapes treated as first-class in the app: headings, paragraphs, `-` bullet lists, checkable task items, links, and strong emphasis. First-class structures should carry matching visual and accessible meaning. Other Markdown-like text may be kept in notes, but is not treated as a first-class structure.
 _Avoid_: Full Markdown editor, GitHub Flavored Markdown surface
+
+**Link**:
+A clickable web address inside Markdown note text, written either as a plain URL or as Markdown link text. A link belongs to the note text and does not create a separate bookmark or attachment.
+_Avoid_: Bookmark, attachment, rich embed, preview card
+
+**Strong emphasis**:
+Inline Markdown note text that the user marks as more prominent and sees as bold text. Strong emphasis belongs to the note text and does not create a separate style object.
+_Avoid_: Rich text styling, font weight setting, text style object
 
 **Starter note**:
 The first note shown in a new local note store, containing editable example content instead of a separate onboarding flow.

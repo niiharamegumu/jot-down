@@ -18,6 +18,10 @@ describe('Note title', () => {
     expect(deriveNoteTitle('\n- [x] メール返信\n# 後の見出し')).toBe('後の見出し');
   });
 
+  it('uses supported inline Markdown text without formatting markers', () => {
+    expect(deriveNoteTitle('**重要** [仕様](https://example.com/spec)')).toBe('重要 仕様');
+  });
+
   it('shows untitled when a note has no usable text', () => {
     expect(deriveNoteTitle(' \n\t\n')).toBe('無題');
   });
@@ -26,6 +30,12 @@ describe('Note title', () => {
 describe('Note snippet', () => {
   it('summarizes note text without task and list markers', () => {
     expect(deriveNoteSnippet('# 今日\n- [ ] 買い物\n- メモ')).toBe('今日 買い物 メモ');
+  });
+
+  it('summarizes supported inline Markdown as readable text', () => {
+    expect(deriveNoteSnippet('**重要**: [仕様](https://example.com/spec)を見る')).toBe(
+      '重要: 仕様を見る'
+    );
   });
 
   it('keeps snippets short for the note list', () => {
