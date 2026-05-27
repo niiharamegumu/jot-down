@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { EditorPane } from './EditorPane';
 
+const mockSetMarkdown = vi.fn();
+
 vi.mock('@mdxeditor/editor', async () => {
   const React = await import('react');
 
@@ -15,7 +17,7 @@ vi.mock('@mdxeditor/editor', async () => {
       ref
     ) {
       React.useImperativeHandle(ref, () => ({
-        setMarkdown: vi.fn()
+        setMarkdown: mockSetMarkdown
       }));
 
       return (
@@ -34,10 +36,13 @@ vi.mock('@mdxeditor/editor', async () => {
             }
 
             return (
-              <p key={`${line}-${index}`}>
-                <span role="checkbox" aria-checked={task[1].toLowerCase() === 'x'} />
+              <li
+                key={`${line}-${index}`}
+                role="checkbox"
+                aria-checked={task[1].toLowerCase() === 'x'}
+              >
                 {task[2]}
-              </p>
+              </li>
             );
           })}
         </div>
@@ -100,6 +105,20 @@ describe('EditorPane', () => {
     fireEvent.click(firstTask, { clientX: 1 });
 
     expect(onMarkdownChange).toHaveBeenCalledWith('- [x] 買い物\n- [x] メール返信');
+  });
+
+  it('does not reset the editor while typing into a regular unchecked task', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '- [ ] a' });
+
+    mockSetMarkdown.mockClear();
+
+    const editor = screen.getByLabelText('Markdown editor');
+    editor.textContent = '- [ ] aa';
+    fireEvent.input(editor);
+
+    expect(mockSetMarkdown).not.toHaveBeenCalled();
+    expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] aa');
   });
 
   it('flushes note changes when editing focus leaves the editor', () => {

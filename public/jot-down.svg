@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Jot Down">
-  <rect width="512" height="512" rx="112" fill="#f4f0e8"/>
-  <path d="M138 126h236c22 0 40 18 40 40v210c0 22-18 40-40 40H138c-22 0-40-18-40-40V166c0-22 18-40 40-40Z" fill="#fffaf1" stroke="#d8cbb8" stroke-width="12"/>
-  <path d="M162 210h150M162 260h188M162 310h122" stroke="#2f2a24" stroke-width="22" stroke-linecap="round"/>
-  <path d="m333 304 32 32 70-88" fill="none" stroke="#6f8f72" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
