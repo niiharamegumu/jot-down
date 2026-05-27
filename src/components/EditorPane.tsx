@@ -14,8 +14,11 @@ type EditorPaneProps = {
   markdown: string;
   updatedAt: string | null;
   storageError: string | null;
+  appUpdateAvailable: boolean;
+  isApplyingAppUpdate: boolean;
   onMarkdownChange: (markdown: string) => void;
   onFlush: () => void;
+  onApplyAppUpdate: () => void;
   onDeleteNote: () => void;
   onBackToList: () => void;
 };
@@ -35,8 +38,11 @@ export function EditorPane({
   markdown,
   updatedAt,
   storageError,
+  appUpdateAvailable,
+  isApplyingAppUpdate,
   onMarkdownChange,
   onFlush,
+  onApplyAppUpdate,
   onDeleteNote,
   onBackToList
 }: EditorPaneProps) {
@@ -91,6 +97,15 @@ export function EditorPane({
         <div className="storage-error" role="alert">
           <strong>保存できません。</strong>
           <span>{storageError}</span>
+        </div>
+      ) : null}
+
+      {appUpdateAvailable ? (
+        <div className="app-update" role="status">
+          <span>新しいバージョンがあります。</span>
+          <button type="button" onClick={onApplyAppUpdate} disabled={isApplyingAppUpdate}>
+            {isApplyingAppUpdate ? '更新中...' : '更新'}
+          </button>
         </div>
       ) : null}
 

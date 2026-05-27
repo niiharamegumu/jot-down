@@ -35,6 +35,8 @@ Other Markdown-like text is kept as note text but is not treated as a first-clas
 
 The app is installable as a PWA through the browser's standard install action when supported. Jot Down does not show an in-app install prompt in the initial version.
 
+When an installed PWA detects a newly available app version, it shows a persistent update bar. The update is applied only after the user chooses to update, and the active note is saved before the app reloads.
+
 ## Out Of Scope Initially
 
 - User accounts.

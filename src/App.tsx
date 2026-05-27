@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 import { EditorPane } from './components/EditorPane';
 import { NoteList } from './components/NoteList';
 import { deleteNote, loadNotes, putNote } from './data/notesDb';
@@ -31,8 +32,19 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(() => loadSidebarWidth());
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('list');
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const [isInstalledPwa, setIsInstalledPwa] = useState(() => isRunningAsInstalledPwa());
+  const [isApplyingAppUpdate, setIsApplyingAppUpdate] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
   const resizePointerIdRef = useRef<number | null>(null);
+  const serviceWorkerRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
+  const {
+    needRefresh: [needRefresh],
+    updateServiceWorker
+  } = useRegisterSW({
+    onRegisteredSW(_swScriptUrl, registration) {
+      serviceWorkerRegistrationRef.current = registration ?? null;
+    }
+  });
 
   const selectedNote = notes.find((note) => note.id === selectedNoteId) ?? null;
   const visibleNotes = sortNotesByUpdatedTime(notes).filter((note) => matchesNoteSearch(note, query));
@@ -81,15 +93,35 @@ export function App() {
     return () => window.clearTimeout(timeoutId);
   }, [activeMarkdown, selectedNote]);
 
+  useEffect(() => {
+    const displayModeQuery = window.matchMedia('(display-mode: standalone)');
+
+    function updateInstalledPwaState() {
+      setIsInstalledPwa(isRunningAsInstalledPwa());
+    }
+
+    displayModeQuery.addEventListener('change', updateInstalledPwaState);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      displayModeQuery.removeEventListener('change', updateInstalledPwaState);
+      window.removeEventListener('online', handleOnline);
+    };
+
+    function handleOnline() {
+      void serviceWorkerRegistrationRef.current?.update();
+    }
+  }, []);
+
   function updateNotes(nextNote: Note) {
     setNotes((currentNotes) =>
       sortNotesByUpdatedTime(currentNotes.map((note) => (note.id === nextNote.id ? nextNote : note)))
     );
   }
 
-  async function persistActiveNote(markdown: string) {
+  async function persistActiveNote(markdown: string): Promise<boolean> {
     if (!selectedNote || markdown === selectedNote.markdown) {
-      return;
+      return true;
     }
 
     const nextNote: Note = {
@@ -103,8 +135,10 @@ export function App() {
     try {
       await putNote(nextNote);
       setStorageError(null);
+      return true;
     } catch (error) {
       setStorageError(getStorageErrorMessage(error));
+      return false;
     }
   }
 
@@ -174,6 +208,23 @@ export function App() {
     }
   }
 
+  async function handleApplyAppUpdate() {
+    setIsApplyingAppUpdate(true);
+    const saved = await persistActiveNote(activeMarkdown);
+
+    if (!saved) {
+      setIsApplyingAppUpdate(false);
+      return;
+    }
+
+    try {
+      await updateServiceWorker(true);
+    } catch (error) {
+      console.error(error);
+      setIsApplyingAppUpdate(false);
+    }
+  }
+
   return (
     <div
       ref={shellRef}
@@ -214,8 +265,11 @@ export function App() {
         markdown={activeMarkdown}
         updatedAt={selectedNote?.updatedAt ?? null}
         storageError={storageError}
+        appUpdateAvailable={isInstalledPwa && needRefresh}
+        isApplyingAppUpdate={isApplyingAppUpdate}
         onMarkdownChange={handleMarkdownChange}
         onFlush={() => void persistActiveNote(activeMarkdown)}
+        onApplyAppUpdate={handleApplyAppUpdate}
         onDeleteNote={handleDeleteNote}
         onBackToList={() => setMobileView('list')}
       />
@@ -316,4 +370,9 @@ function loadSidebarWidth(): number {
   }
 
   return Math.min(maxSidebarWidth, Math.max(minSidebarWidth, storedValue));
+}
+
+function isRunningAsInstalledPwa(): boolean {
+  const standaloneNavigator = navigator as Navigator & { standalone?: boolean };
+  return window.matchMedia('(display-mode: standalone)').matches || standaloneNavigator.standalone === true;
 }

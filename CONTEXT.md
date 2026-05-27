@@ -4,6 +4,10 @@ Jot Down is a local-first note context for quickly writing lightweight Markdown 
 
 ## Language
 
+**App update**:
+A newly available version of Jot Down that the app can detect in the background but should only apply when the user chooses to update. Applying an app update must not silently interrupt note writing.
+_Avoid_: Forced refresh, automatic reload, program update
+
 **Autosave**:
 The expectation that note changes are kept without a user-facing save action, using prompt background persistence after edits and when editing focus is left. Save failures should be visible without discarding the user's current note text.
 _Avoid_: Save button, draft state, persistent saved indicator
