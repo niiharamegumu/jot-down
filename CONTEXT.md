@@ -9,11 +9,11 @@ A newly available version of Jot Down that the app can detect in the background 
 _Avoid_: Forced refresh, automatic reload, program update
 
 **Autosave**:
-The expectation that note changes are kept without a user-facing save action, using prompt background persistence after edits and when editing focus is left. Save failures should be visible without discarding the user's current note text.
+The expectation that note and note template changes are kept without a user-facing save action, using prompt background persistence after edits and when editing focus is left. Save failures should be visible without discarding the user's current note or note template text.
 _Avoid_: Save button, draft state, persistent saved indicator
 
 **Local note store**:
-The browser-resident place where notes are kept for offline use on the current device. Each device has its own local note store; it has no user account owner, is expected to retain notes during normal use of that browser, and does not include cross-tab conflict resolution, user-managed Markdown files, or synced cloud storage. If the local note store is unavailable, the app should make saving unavailable clear rather than pretending notes can be kept.
+The browser-resident place where notes and note templates are kept for offline use on the current device. Each device has its own local note store; it has no user account owner, is expected to retain notes and note templates during normal use of that browser, and does not include cross-tab conflict resolution, user-managed Markdown files, or synced cloud storage. If the local note store is unavailable, the app should make saving unavailable clear rather than pretending notes or note templates can be kept.
 _Avoid_: Local folder, cloud sync, file vault, account, import/export
 
 **Markdown live editing**:
@@ -32,6 +32,22 @@ _Avoid_: Trash, archive
 The display name of a note, derived from the first heading of any level in the note's Markdown text, or from the first non-empty line when no heading exists. A note with no usable non-whitespace text is shown as untitled without storing that as note content.
 _Avoid_: Separate title field, filename
 
+**Note template**:
+A reusable Markdown pattern kept outside the note list and used as starting or inserted text for a note. A note template is authored with the same Markdown live editing expectations as a note, but is not itself a note, does not appear in note search or note order, and only becomes note content when applied to a note.
+_Avoid_: Starter note, document template, snippet
+
+**Note template application**:
+The act of turning a note template into note Markdown, either as the initial text of a new note or as text inserted unchanged at the current cursor position inside an existing note. Applying a note template is a note edit, not a relationship that remains attached to the note.
+_Avoid_: Template binding, template instance, note type
+
+**Note template management**:
+The user-facing place for creating, renaming, editing, and deleting note templates outside the note list. Note template management does not create notes until a note template is applied.
+_Avoid_: Template registration only, note editing, settings
+
+**Note template name**:
+The unique user-facing label used to identify a note template before it is applied. Unlike a note title, a note template name is separate from the template's Markdown text and is not inserted into a note unless the Markdown text itself includes it.
+_Avoid_: Note title, filename, heading-derived name
+
 **Note updated time**:
 The user-visible recency signal for a note, reflecting when the note's Markdown text was last edited.
 _Avoid_: Created time as primary note metadata
@@ -49,7 +65,7 @@ A short preview of a note's Markdown text used to help identify the note in a li
 _Avoid_: Task summary, generated description
 
 **Offline use**:
-The expectation that the app's note creation, editing, checking, searching, and deletion behavior works without a network connection.
+The expectation that the app's note creation, editing, checking, searching, deletion, note template management, and note template application behavior works without a network connection.
 _Avoid_: App-shell-only offline mode
 
 **Supported Markdown**:
@@ -91,6 +107,18 @@ Domain expert: "No. The user is writing notes; document and page are implementat
 
 Developer: "Where does a note title come from?"
 Domain expert: "From the note text. If the user wants to rename a note, they edit the note content."
+
+Developer: "Should reusable meeting notes appear in the note list until someone uses them?"
+Domain expert: "No. That is a note template, not a note. It becomes note content only when applied."
+
+Developer: "After applying a note template, does the note remember which template it came from?"
+Domain expert: "No. Applying a note template is just a note edit; the note keeps Markdown text, not a template link."
+
+Developer: "Can a note template be renamed by changing its first heading?"
+Domain expert: "No. A note template has its own name; headings inside the template are Markdown that may later become note content."
+
+Developer: "Does opening note template management create a new note?"
+Domain expert: "No. Notes are only created when the user creates a note directly or applies a note template as a new note."
 
 Developer: "Can users drag tasks or notes into a custom order?"
 Domain expert: "Not initially. Notes follow recent editing, and tasks follow the order of the note text."
