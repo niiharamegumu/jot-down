@@ -7,14 +7,16 @@ import {
   MDXEditor,
   type MDXEditorMethods
 } from '@mdxeditor/editor';
-import { useEffect, useRef, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { Note } from '../domain/note';
 import { normalizeSupportedMarkdown, toggleTaskAtIndex } from '../domain/note';
+import type { NoteTemplate } from '../domain/noteTemplate';
 
 type EditorPaneProps = {
   note: Note | null;
   markdown: string;
   updatedAt: string | null;
+  applicableTemplates: NoteTemplate[];
   storageError: string | null;
   appUpdateAvailable: boolean;
   isApplyingAppUpdate: boolean;
@@ -22,6 +24,7 @@ type EditorPaneProps = {
   onFlush: () => void;
   onApplyAppUpdate: () => void;
   onDeleteNote: () => void;
+  onOpenTemplateManagement: () => void;
   onBackToList: () => void;
 };
 
@@ -45,6 +48,7 @@ export function EditorPane({
   note,
   markdown,
   updatedAt,
+  applicableTemplates,
   storageError,
   appUpdateAvailable,
   isApplyingAppUpdate,
@@ -52,11 +56,13 @@ export function EditorPane({
   onFlush,
   onApplyAppUpdate,
   onDeleteNote,
+  onOpenTemplateManagement,
   onBackToList
 }: EditorPaneProps) {
   const editorRef = useRef<MDXEditorMethods>(null);
   const editorShellRef = useRef<HTMLElement>(null);
   const previousNoteIdRef = useRef<string | null>(null);
+  const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!note) {
@@ -87,6 +93,7 @@ export function EditorPane({
           type="button"
           onClick={onBackToList}
           aria-label="Note一覧へ戻る"
+          data-tooltip="Note一覧へ戻る"
         >
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="M15 5l-7 7 7 7" />
@@ -95,11 +102,47 @@ export function EditorPane({
         <p className="editor-toolbar__updated-at">
           {updatedAt ? updatedAtFormatter.format(new Date(updatedAt)) : ''}
         </p>
+        <div className="template-insert">
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="テンプレートを挿入"
+            data-tooltip="テンプレートを挿入"
+            onClick={() => setTemplateMenuOpen((open) => !open)}
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M6 3h9l3 3v15H6z" />
+              <path d="M15 3v4h4" />
+              <path d="M9 12h6" />
+              <path d="M9 16h4" />
+            </svg>
+          </button>
+          {templateMenuOpen ? (
+            <div className="template-popover">
+              {applicableTemplates.length > 0 ? (
+                applicableTemplates.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => handleInsertTemplate(template.markdown)}
+                  >
+                    {template.name}
+                  </button>
+                ))
+              ) : (
+                <button type="button" onClick={handleOpenTemplateManagement}>
+                  テンプレートを作成
+                </button>
+              )}
+            </div>
+          ) : null}
+        </div>
         <button
           className="delete-button"
           type="button"
           onClick={onDeleteNote}
           aria-label="Noteを削除"
+          data-tooltip="Noteを削除"
         >
           <svg aria-hidden="true" viewBox="0 0 24 24">
             <path d="M3 6h18" />
@@ -175,6 +218,19 @@ export function EditorPane({
 
   function handleMarkdownChange(nextMarkdown: string) {
     onMarkdownChange(normalizeSupportedMarkdown(nextMarkdown));
+  }
+
+  function handleInsertTemplate(templateMarkdown: string) {
+    editorRef.current?.focus(() => {
+      editorRef.current?.insertMarkdown(templateMarkdown);
+      onMarkdownChange(normalizeSupportedMarkdown(editorRef.current?.getMarkdown() ?? markdown));
+    });
+    setTemplateMenuOpen(false);
+  }
+
+  function handleOpenTemplateManagement() {
+    setTemplateMenuOpen(false);
+    onOpenTemplateManagement();
   }
 
   function focusEditorStart() {

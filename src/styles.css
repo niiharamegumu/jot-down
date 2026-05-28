@@ -64,9 +64,10 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: var(--sidebar-width, 360px) 8px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width, 360px) 1px minmax(0, 1fr);
   width: 100%;
   min-height: 100vh;
+  border-top: 1px solid var(--line);
   margin: 0;
   padding: 0;
 }
@@ -81,12 +82,12 @@ button {
   flex-direction: column;
   min-height: 100vh;
   background: var(--sidebar);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .pane-resizer {
   position: relative;
-  width: 8px;
+  width: 1px;
   min-height: 100vh;
   background: transparent;
   cursor: col-resize;
@@ -96,11 +97,21 @@ button {
 .pane-resizer::before {
   position: absolute;
   top: 0;
-  left: 3px;
+  left: 0;
   display: block;
   width: 1px;
   height: 100%;
   background: var(--line);
+  content: "";
+}
+
+.pane-resizer::after {
+  position: absolute;
+  top: 0;
+  left: -4px;
+  display: block;
+  width: 9px;
+  height: 100%;
   content: "";
 }
 
@@ -110,7 +121,9 @@ button {
 }
 
 .app-shell--resizing,
-.app-shell--resizing * {
+.app-shell--resizing *,
+.template-manager--resizing,
+.template-manager--resizing * {
   cursor: col-resize;
   user-select: none;
 }
@@ -125,8 +138,9 @@ button {
 
 .editor-toolbar {
   display: grid;
-  grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem 2.5rem;
   align-items: center;
+  column-gap: 0.4rem;
   min-height: 3.4rem;
   border-bottom: 1px solid var(--line);
   padding: 0.35rem 1.25rem;
@@ -153,6 +167,7 @@ h2 {
 .icon-button,
 .delete-button,
 .back-button {
+  position: relative;
   display: inline-grid;
   place-items: center;
   width: 2.25rem;
@@ -169,13 +184,10 @@ h2 {
 
 .icon-button {
   color: var(--accent);
-  font-size: 2rem;
-  font-weight: 300;
-  line-height: 0;
 }
 
 .delete-button {
-  grid-column: 3;
+  grid-column: 4;
   justify-self: end;
   color: var(--danger);
 }
@@ -187,8 +199,13 @@ h2 {
   color: var(--text);
 }
 
+.back-button--visible {
+  display: inline-grid;
+}
+
 .delete-button svg,
-.back-button svg {
+.back-button svg,
+.icon-button svg {
   width: 1.25rem;
   height: 1.25rem;
   fill: none;
@@ -196,6 +213,67 @@ h2 {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.8;
+}
+
+.icon-button[data-tooltip]::after,
+.delete-button[data-tooltip]::after,
+.back-button[data-tooltip]::after {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.35rem);
+  bottom: auto;
+  left: 50%;
+  width: max-content;
+  max-width: 14rem;
+  border-radius: 0.35rem;
+  padding: 0.32rem 0.48rem;
+  color: var(--selected-text);
+  background: var(--accent);
+  content: attr(data-tooltip);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.note-list__header .icon-button[data-tooltip]::after,
+.template-sidebar__header .icon-button[data-tooltip]::after {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
+.note-list__footer .icon-button[data-tooltip]::after {
+  top: auto;
+  right: 0;
+  bottom: calc(100% + 0.35rem);
+  left: auto;
+  transform: none;
+}
+
+.template-sidebar__header .back-button[data-tooltip]::after {
+  right: auto;
+  left: 0;
+  transform: none;
+}
+
+.editor-toolbar .delete-button[data-tooltip]::after,
+.template-editor__toolbar .delete-button[data-tooltip]::after,
+.template-editor__toolbar .icon-button[data-tooltip]::after {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
+.icon-button[data-tooltip]:hover::after,
+.delete-button[data-tooltip]:hover::after,
+.back-button[data-tooltip]:hover::after,
+.icon-button[data-tooltip]:focus-visible::after,
+.delete-button[data-tooltip]:focus-visible::after,
+.back-button[data-tooltip]:focus-visible::after {
+  opacity: 1;
 }
 
 .editor-toolbar__updated-at {
@@ -208,6 +286,44 @@ h2 {
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.template-insert {
+  position: relative;
+  grid-column: 3;
+  justify-self: end;
+  width: 2.25rem;
+}
+
+.template-popover {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  display: flex;
+  min-width: 12rem;
+  max-width: min(18rem, 70vw);
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  padding: 0.3rem;
+  background: var(--editor);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+}
+
+.template-popover button {
+  width: 100%;
+  border: 0;
+  border-radius: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.template-popover button:hover {
+  background: var(--hover);
 }
 
 .icon-button:hover,
@@ -242,6 +358,13 @@ h2 {
   gap: 0;
   padding: 0 0.75rem 0.75rem;
   overflow: auto;
+}
+
+.note-list__footer {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  padding: 0.65rem 1.25rem;
 }
 
 .note-card {
@@ -316,6 +439,153 @@ h2 {
   padding: 0.8rem 0.95rem;
   color: var(--danger);
   background: rgba(165, 71, 61, 0.08);
+}
+
+.template-manager {
+  display: grid;
+  grid-template-columns: var(--sidebar-width, 360px) 1px minmax(0, 1fr);
+  min-height: 100vh;
+  border-top: 1px solid var(--line);
+  background: var(--editor);
+}
+
+.template-sidebar {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  background: var(--sidebar);
+  overflow: visible;
+}
+
+.template-sidebar__header {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem;
+  align-items: center;
+  min-height: 3.4rem;
+  padding: 0.55rem 1.25rem 0.35rem;
+}
+
+.template-sidebar__header h1 {
+  overflow: hidden;
+  font-size: 1.05rem;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 0.75rem;
+  overflow: auto;
+}
+
+.template-card {
+  display: grid;
+  gap: 0.2rem;
+  width: 100%;
+  border: 0;
+  border-radius: 0.55rem;
+  padding: 0.72rem 0.85rem;
+  color: var(--text);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.template-card[aria-selected="true"] {
+  color: var(--selected-text);
+  background: var(--accent);
+}
+
+.template-card[aria-selected="true"] .template-card__status {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.template-card:focus-visible {
+  outline: 3px solid var(--accent-soft);
+}
+
+.template-card__name {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-card__status {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.template-editor {
+  display: flex;
+  min-width: 0;
+  min-height: 100vh;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.template-editor__empty {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  color: var(--muted);
+}
+
+.template-editor__toolbar {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem 2.5rem;
+  align-items: center;
+  column-gap: 0.4rem;
+  min-height: 3.4rem;
+  border-bottom: 1px solid var(--line);
+  padding: 0.35rem 1.25rem;
+}
+
+.template-name-field {
+  grid-column: 2;
+}
+
+.template-editor__toolbar .icon-button {
+  grid-column: 3;
+  justify-self: end;
+}
+
+.template-editor__toolbar .delete-button {
+  grid-column: 4;
+}
+
+.template-name-field input {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 0.35rem 0;
+  color: var(--text);
+  background: transparent;
+  font-size: 1.05rem;
+  font-weight: 700;
+  outline: none;
+}
+
+.template-name-field input:focus {
+  box-shadow: none;
+}
+
+.template-status {
+  margin: 0.85rem 1.25rem 0;
+  border: 1px solid rgba(165, 71, 61, 0.3);
+  border-radius: 0.55rem;
+  padding: 0.6rem 0.75rem;
+  color: var(--danger);
+  background: rgba(165, 71, 61, 0.08);
+  font-size: 0.92rem;
+}
+
+.icon-button:disabled {
+  cursor: default;
+  opacity: 0.38;
 }
 
 .app-update {
@@ -525,5 +795,27 @@ h2 {
   .jot-editor {
     min-height: calc(100vh - 3.4rem);
     padding: 1.25rem;
+  }
+
+  .template-manager {
+    grid-template-columns: 1fr;
+  }
+
+  .template-sidebar,
+  .template-editor {
+    min-height: auto;
+  }
+
+  .template-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .template-list {
+    max-height: 36vh;
+  }
+
+  .template-editor {
+    min-height: 64vh;
   }
 }

@@ -26,6 +26,7 @@ describe('NoteList', () => {
         onQueryChange={vi.fn()}
         onCreateNote={vi.fn()}
         onSelectNote={vi.fn()}
+        onOpenTemplateManagement={vi.fn()}
       />
     );
 
@@ -45,6 +46,7 @@ describe('NoteList', () => {
     const onQueryChange = vi.fn();
     const onCreateNote = vi.fn();
     const onSelectNote = vi.fn();
+    const onOpenTemplateManagement = vi.fn();
 
     render(
       <NoteList
@@ -54,15 +56,18 @@ describe('NoteList', () => {
         onQueryChange={onQueryChange}
         onCreateNote={onCreateNote}
         onSelectNote={onSelectNote}
+        onOpenTemplateManagement={onOpenTemplateManagement}
       />
     );
 
     await user.type(screen.getByRole('searchbox', { name: 'Noteを検索' }), '買い物');
     await user.click(screen.getByRole('button', { name: '新しいNoteを作成' }));
     await user.click(screen.getByRole('option', { name: /見出しなし/ }));
+    await user.click(screen.getByRole('button', { name: 'テンプレート管理' }));
 
     expect(onQueryChange).toHaveBeenLastCalledWith('物');
     expect(onCreateNote).toHaveBeenCalledTimes(1);
     expect(onSelectNote).toHaveBeenCalledWith('note-2');
+    expect(onOpenTemplateManagement).toHaveBeenCalledTimes(1);
   });
 });

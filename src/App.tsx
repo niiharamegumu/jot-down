@@ -2,7 +2,15 @@ import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { EditorPane } from './components/EditorPane';
 import { NoteList } from './components/NoteList';
-import { deleteNote, loadNotes, putNote } from './data/notesDb';
+import { TemplateManager } from './components/TemplateManager';
+import {
+  deleteNote,
+  deleteNoteTemplate,
+  loadNotes,
+  loadNoteTemplates,
+  putNote,
+  putNoteTemplate
+} from './data/notesDb';
 import {
   createNote,
   matchesNoteSearch,
@@ -10,6 +18,12 @@ import {
   sortNotesByUpdatedTime,
   type Note
 } from './domain/note';
+import {
+  createNoteTemplate,
+  getApplicableNoteTemplates,
+  sortNoteTemplatesByName,
+  type NoteTemplate
+} from './domain/noteTemplate';
 
 const starterMarkdown = `# 今日やること
 
@@ -25,12 +39,17 @@ const maxSidebarWidth = 520;
 
 export function App() {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [noteTemplates, setNoteTemplates] = useState<NoteTemplate[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [activeMarkdown, setActiveMarkdown] = useState('');
+  const [activeTemplateName, setActiveTemplateName] = useState('');
+  const [activeTemplateMarkdown, setActiveTemplateMarkdown] = useState('');
   const [query, setQuery] = useState('');
   const [storageError, setStorageError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => loadSidebarWidth());
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('list');
+  const [appView, setAppView] = useState<'notes' | 'templates'>('notes');
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [isInstalledPwa, setIsInstalledPwa] = useState(() => isRunningAsInstalledPwa());
   const [isApplyingAppUpdate, setIsApplyingAppUpdate] = useState(false);
@@ -47,9 +66,12 @@ export function App() {
   });
 
   const selectedNote = notes.find((note) => note.id === selectedNoteId) ?? null;
+  const selectedTemplate =
+    noteTemplates.find((template) => template.id === selectedTemplateId) ?? null;
   const visibleNotes = sortNotesByUpdatedTime(notes).filter((note) =>
     matchesNoteSearch(note, query)
   );
+  const applicableTemplates = getApplicableNoteTemplates(noteTemplates);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,6 +79,7 @@ export function App() {
     async function boot() {
       try {
         const loadedNotes = await loadNotes();
+        const loadedTemplates = await loadNoteTemplates();
         const initialNotes =
           loadedNotes.length > 0 ? loadedNotes : [createNote(starterMarkdown, starterNoteId)];
 
@@ -67,8 +90,13 @@ export function App() {
         if (!cancelled) {
           const sortedNotes = sortNotesByUpdatedTime(initialNotes);
           setNotes(sortedNotes);
+          const sortedTemplates = sortNoteTemplatesByName(loadedTemplates);
+          setNoteTemplates(sortedTemplates);
           setSelectedNoteId(sortedNotes[0]?.id ?? null);
+          setSelectedTemplateId(sortedTemplates[0]?.id ?? null);
           setActiveMarkdown(sortedNotes[0]?.markdown ?? '');
+          setActiveTemplateName(sortedTemplates[0]?.name ?? '');
+          setActiveTemplateMarkdown(sortedTemplates[0]?.markdown ?? '');
         }
       } catch (error) {
         if (!cancelled) {
@@ -95,6 +123,22 @@ export function App() {
 
     return () => window.clearTimeout(timeoutId);
   }, [activeMarkdown, selectedNote]);
+
+  useEffect(() => {
+    if (
+      !selectedTemplate ||
+      (activeTemplateName === selectedTemplate.name &&
+        activeTemplateMarkdown === selectedTemplate.markdown)
+    ) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
+    }, 450);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [activeTemplateMarkdown, activeTemplateName, selectedTemplate]);
 
   useEffect(() => {
     const displayModeQuery = window.matchMedia('(display-mode: standalone)');
@@ -124,6 +168,16 @@ export function App() {
     );
   }
 
+  function updateNoteTemplates(nextTemplate: NoteTemplate) {
+    setNoteTemplates((currentTemplates) =>
+      sortNoteTemplatesByName(
+        currentTemplates.map((template) =>
+          template.id === nextTemplate.id ? nextTemplate : template
+        )
+      )
+    );
+  }
+
   async function persistActiveNote(markdown: string): Promise<boolean> {
     if (!selectedNote || markdown === selectedNote.markdown) {
       return true;
@@ -147,8 +201,43 @@ export function App() {
     }
   }
 
+  async function persistActiveTemplate(name: string, markdown: string): Promise<boolean> {
+    if (
+      !selectedTemplate ||
+      (name === selectedTemplate.name && markdown === selectedTemplate.markdown)
+    ) {
+      return true;
+    }
+
+    const nextTemplate: NoteTemplate = {
+      ...selectedTemplate,
+      name,
+      markdown,
+      updatedAt: new Date().toISOString()
+    };
+
+    updateNoteTemplates(nextTemplate);
+
+    try {
+      await putNoteTemplate(nextTemplate);
+      setStorageError(null);
+      return true;
+    } catch (error) {
+      setStorageError(getStorageErrorMessage(error));
+      return false;
+    }
+  }
+
   function handleMarkdownChange(markdown: string) {
     setActiveMarkdown(normalizeSupportedMarkdown(markdown));
+  }
+
+  function handleTemplateNameChange(name: string) {
+    setActiveTemplateName(name);
+  }
+
+  function handleTemplateMarkdownChange(markdown: string) {
+    setActiveTemplateMarkdown(normalizeSupportedMarkdown(markdown));
   }
 
   function handleQueryChange(nextQuery: string) {
@@ -172,6 +261,25 @@ export function App() {
     }
   }
 
+  async function handleCreateTemplate() {
+    await persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
+
+    const template = createNoteTemplate();
+    setNoteTemplates((currentTemplates) =>
+      sortNoteTemplatesByName([template, ...currentTemplates])
+    );
+    setSelectedTemplateId(template.id);
+    setActiveTemplateName(template.name);
+    setActiveTemplateMarkdown(template.markdown);
+
+    try {
+      await putNoteTemplate(template);
+      setStorageError(null);
+    } catch (error) {
+      setStorageError(getStorageErrorMessage(error));
+    }
+  }
+
   async function handleSelectNote(noteId: string) {
     await persistActiveNote(activeMarkdown);
     const nextNote = notes.find((note) => note.id === noteId);
@@ -182,6 +290,18 @@ export function App() {
     setSelectedNoteId(nextNote.id);
     setActiveMarkdown(nextNote.markdown);
     setMobileView('editor');
+  }
+
+  async function handleSelectTemplate(templateId: string) {
+    await persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
+    const nextTemplate = noteTemplates.find((template) => template.id === templateId);
+    if (!nextTemplate) {
+      return;
+    }
+
+    setSelectedTemplateId(nextTemplate.id);
+    setActiveTemplateName(nextTemplate.name);
+    setActiveTemplateMarkdown(nextTemplate.markdown);
   }
 
   async function handleDeleteNote() {
@@ -215,6 +335,63 @@ export function App() {
     }
   }
 
+  async function handleDeleteTemplate() {
+    if (!selectedTemplate) {
+      return;
+    }
+
+    const confirmed = window.confirm('このテンプレートは削除され、復元できません。削除しますか？');
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteNoteTemplate(selectedTemplate.id);
+      const remainingTemplates = sortNoteTemplatesByName(
+        noteTemplates.filter((template) => template.id !== selectedTemplate.id)
+      );
+      setNoteTemplates(remainingTemplates);
+      setSelectedTemplateId(remainingTemplates[0]?.id ?? null);
+      setActiveTemplateName(remainingTemplates[0]?.name ?? '');
+      setActiveTemplateMarkdown(remainingTemplates[0]?.markdown ?? '');
+      setStorageError(null);
+    } catch (error) {
+      setStorageError(getStorageErrorMessage(error));
+    }
+  }
+
+  async function handleCreateNoteFromTemplate(templateId: string) {
+    await persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
+    await persistActiveNote(activeMarkdown);
+
+    const storedTemplate = noteTemplates.find((item) => item.id === templateId);
+    const template =
+      storedTemplate && storedTemplate.id === selectedTemplateId
+        ? {
+            ...storedTemplate,
+            name: activeTemplateName,
+            markdown: activeTemplateMarkdown
+          }
+        : storedTemplate;
+    if (!template) {
+      return;
+    }
+
+    const note = createNote(template.markdown);
+    setNotes((currentNotes) => sortNotesByUpdatedTime([note, ...currentNotes]));
+    setSelectedNoteId(note.id);
+    setActiveMarkdown(note.markdown);
+    setAppView('notes');
+    setMobileView('editor');
+
+    try {
+      await putNote(note);
+      setStorageError(null);
+    } catch (error) {
+      setStorageError(getStorageErrorMessage(error));
+    }
+  }
+
   async function handleApplyAppUpdate() {
     setIsApplyingAppUpdate(true);
     const saved = await persistActiveNote(activeMarkdown);
@@ -232,6 +409,37 @@ export function App() {
     }
   }
 
+  if (appView === 'templates') {
+    return (
+      <TemplateManager
+        templates={noteTemplates.map((template) =>
+          template.id === selectedTemplateId
+            ? { ...template, name: activeTemplateName, markdown: activeTemplateMarkdown }
+            : template
+        )}
+        selectedTemplateId={selectedTemplateId}
+        sidebarWidth={sidebarWidth}
+        isResizingSidebar={isResizingSidebar}
+        storageError={storageError}
+        onCreateTemplate={handleCreateTemplate}
+        onSelectTemplate={handleSelectTemplate}
+        onChangeTemplateName={handleTemplateNameChange}
+        onChangeTemplateMarkdown={handleTemplateMarkdownChange}
+        onFlush={() => void persistActiveTemplate(activeTemplateName, activeTemplateMarkdown)}
+        onDeleteTemplate={handleDeleteTemplate}
+        onCreateNoteFromTemplate={handleCreateNoteFromTemplate}
+        onResizePointerDown={handleResizePointerDown}
+        onResizeKeyDown={(direction) =>
+          commitSidebarWidth(sidebarWidth + (direction === 'wider' ? 16 : -16))
+        }
+        onBackToNotes={() => {
+          void persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
+          setAppView('notes');
+        }}
+      />
+    );
+  }
+
   return (
     <div
       ref={shellRef}
@@ -245,6 +453,7 @@ export function App() {
         onQueryChange={handleQueryChange}
         onCreateNote={handleCreateNote}
         onSelectNote={handleSelectNote}
+        onOpenTemplateManagement={() => setAppView('templates')}
       />
       <div
         className="pane-resizer"
@@ -271,6 +480,7 @@ export function App() {
         note={selectedNote}
         markdown={activeMarkdown}
         updatedAt={selectedNote?.updatedAt ?? null}
+        applicableTemplates={applicableTemplates}
         storageError={storageError}
         appUpdateAvailable={isInstalledPwa && needRefresh}
         isApplyingAppUpdate={isApplyingAppUpdate}
@@ -278,6 +488,7 @@ export function App() {
         onFlush={() => void persistActiveNote(activeMarkdown)}
         onApplyAppUpdate={handleApplyAppUpdate}
         onDeleteNote={handleDeleteNote}
+        onOpenTemplateManagement={() => setAppView('templates')}
         onBackToList={() => setMobileView('list')}
       />
     </div>

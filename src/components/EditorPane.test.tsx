@@ -4,6 +4,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { EditorPane } from './EditorPane';
 
 const mockSetMarkdown = vi.fn();
+const mockInsertMarkdown = vi.fn();
+const mockGetMarkdown = vi.fn();
+const mockFocus = vi.fn((callback?: () => void) => callback?.());
 
 vi.mock('@mdxeditor/editor', async () => {
   const React = await import('react');
@@ -19,7 +22,10 @@ vi.mock('@mdxeditor/editor', async () => {
       ref
     ) {
       React.useImperativeHandle(ref, () => ({
-        setMarkdown: mockSetMarkdown
+        getMarkdown: mockGetMarkdown,
+        setMarkdown: mockSetMarkdown,
+        insertMarkdown: mockInsertMarkdown,
+        focus: mockFocus
       }));
 
       return (
@@ -66,6 +72,7 @@ describe('EditorPane', () => {
         note={null}
         markdown=""
         updatedAt={null}
+        applicableTemplates={[]}
         storageError={null}
         appUpdateAvailable={false}
         isApplyingAppUpdate={false}
@@ -73,6 +80,7 @@ describe('EditorPane', () => {
         onFlush={vi.fn()}
         onApplyAppUpdate={vi.fn()}
         onDeleteNote={vi.fn()}
+        onOpenTemplateManagement={vi.fn()}
         onBackToList={vi.fn()}
       />
     );
@@ -141,6 +149,31 @@ describe('EditorPane', () => {
 
     expect(onDeleteNote).toHaveBeenCalledTimes(1);
   });
+
+  it('inserts a selected template into the note Markdown', async () => {
+    const user = userEvent.setup();
+    const onMarkdownChange = vi.fn();
+    mockGetMarkdown.mockReturnValue('- [ ] 買い物\n# 会議');
+
+    renderEditor({
+      onMarkdownChange,
+      applicableTemplates: [
+        {
+          id: 'template-1',
+          name: '会議',
+          markdown: '# 会議',
+          updatedAt: '2026-05-27T03:15:00.000Z'
+        }
+      ]
+    });
+
+    await user.click(screen.getByRole('button', { name: 'テンプレートを挿入' }));
+    await user.click(screen.getByRole('button', { name: '会議' }));
+
+    expect(mockFocus).toHaveBeenCalled();
+    expect(mockInsertMarkdown).toHaveBeenCalledWith('# 会議');
+    expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] 買い物\n# 会議');
+  });
 });
 
 function renderEditor(
@@ -151,6 +184,7 @@ function renderEditor(
       note={note}
       markdown={note.markdown}
       updatedAt={note.updatedAt}
+      applicableTemplates={[]}
       storageError={null}
       appUpdateAvailable={false}
       isApplyingAppUpdate={false}
@@ -158,6 +192,7 @@ function renderEditor(
       onFlush={vi.fn()}
       onApplyAppUpdate={vi.fn()}
       onDeleteNote={vi.fn()}
+      onOpenTemplateManagement={vi.fn()}
       onBackToList={vi.fn()}
       {...props}
     />
