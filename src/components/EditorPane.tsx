@@ -7,10 +7,22 @@ import {
   MDXEditor,
   type MDXEditorMethods
 } from '@mdxeditor/editor';
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent
+} from 'react';
 import type { Note } from '../domain/note';
 import { normalizeSupportedMarkdown, toggleTaskAtIndex } from '../domain/note';
 import type { NoteTemplate } from '../domain/noteTemplate';
+import {
+  captureTaskSelectionSnapshot,
+  restoreTaskSelectionSnapshot,
+  type TaskSelectionSnapshot
+} from './editorTaskSelection';
 
 type EditorPaneProps = {
   note: Note | null;
@@ -44,12 +56,6 @@ const updatedAtFormatter = new Intl.DateTimeFormat('ja-JP', {
   minute: '2-digit'
 });
 
-type TaskSelectionSnapshot = {
-  noteId: string;
-  taskIndex: number;
-  offset: number;
-};
-
 export function EditorPane({
   note,
   markdown,
@@ -68,7 +74,12 @@ export function EditorPane({
   const editorRef = useRef<MDXEditorMethods>(null);
   const editorShellRef = useRef<HTMLElement>(null);
   const previousNoteIdRef = useRef<string | null>(null);
+  const currentNoteIdRef = useRef<string | null>(null);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
+
+  useLayoutEffect(() => {
+    currentNoteIdRef.current = note?.id ?? null;
+  }, [note?.id]);
 
   useEffect(() => {
     if (!note) {
@@ -233,7 +244,7 @@ export function EditorPane({
 
     const taskIndex = getTaskIndex(checkbox);
     if (taskIndex >= 0) {
-      toggleTask(taskIndex, captureTaskSelection(checkbox, taskIndex));
+      toggleTask(taskIndex, captureTaskSelectionSnapshot(activeNoteId, taskIndex, checkbox));
     }
   }
 
@@ -310,82 +321,14 @@ export function EditorPane({
     selection?.addRange(range);
   }
 
-  function captureTaskSelection(checkbox: HTMLElement, taskIndex: number): TaskSelectionSnapshot {
-    const selection = window.getSelection();
-    const selectedNode = selection?.anchorNode;
-    const offset =
-      selectedNode && checkbox.contains(selectedNode)
-        ? getTextOffset(checkbox, selectedNode, selection.anchorOffset)
-        : 0;
-
-    return {
-      noteId: activeNoteId,
-      taskIndex,
-      offset
-    };
-  }
-
   function restoreTaskSelection(snapshot: TaskSelectionSnapshot) {
-    if (snapshot.noteId !== activeNoteId) {
-      return;
-    }
-
     const checkbox = editorShellRef.current?.querySelectorAll('[role="checkbox"][aria-checked]')[
       snapshot.taskIndex
     ];
-    if (!(checkbox instanceof HTMLElement)) {
-      return;
-    }
-
-    checkbox.focus();
-
-    const position = findTextPosition(checkbox, snapshot.offset);
-    const range = document.createRange();
-    range.setStart(position.node, position.offset);
-    range.collapse(true);
-
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
+    restoreTaskSelectionSnapshot(
+      snapshot,
+      () => currentNoteIdRef.current,
+      checkbox instanceof HTMLElement ? checkbox : null
+    );
   }
-}
-
-function getTextOffset(root: Node, target: Node, targetOffset: number): number {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let offset = 0;
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    if (node === target) {
-      return offset + targetOffset;
-    }
-
-    offset += node.textContent?.length ?? 0;
-  }
-
-  return offset;
-}
-
-function findTextPosition(root: Node, targetOffset: number): { node: Node; offset: number } {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let remainingOffset = targetOffset;
-  let lastTextNode: Node | null = null;
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    const textLength = node.textContent?.length ?? 0;
-    lastTextNode = node;
-
-    if (remainingOffset <= textLength) {
-      return { node, offset: remainingOffset };
-    }
-
-    remainingOffset -= textLength;
-  }
-
-  if (lastTextNode) {
-    return { node: lastTextNode, offset: lastTextNode.textContent?.length ?? 0 };
-  }
-
-  return { node: root, offset: 0 };
 }
