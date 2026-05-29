@@ -7,10 +7,22 @@ import {
   MDXEditor,
   type MDXEditorMethods
 } from '@mdxeditor/editor';
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent
+} from 'react';
 import type { Note } from '../domain/note';
 import { normalizeSupportedMarkdown, toggleTaskAtIndex } from '../domain/note';
 import type { NoteTemplate } from '../domain/noteTemplate';
+import {
+  captureTaskSelectionSnapshot,
+  restoreTaskSelectionSnapshot,
+  type TaskSelectionSnapshot
+} from './editorTaskSelection';
 
 type EditorPaneProps = {
   note: Note | null;
@@ -44,19 +56,6 @@ const updatedAtFormatter = new Intl.DateTimeFormat('ja-JP', {
   minute: '2-digit'
 });
 
-type TaskSelectionSnapshot = {
-  noteId: string;
-  taskIndex: number;
-  offset: number;
-  scrollPositions: ScrollPositionSnapshot[];
-};
-
-type ScrollPositionSnapshot = {
-  target: Element;
-  top: number;
-  left: number;
-};
-
 export function EditorPane({
   note,
   markdown,
@@ -78,6 +77,10 @@ export function EditorPane({
   const currentNoteIdRef = useRef<string | null>(null);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
 
+  useLayoutEffect(() => {
+    currentNoteIdRef.current = note?.id ?? null;
+  }, [note?.id]);
+
   useEffect(() => {
     if (!note) {
       previousNoteIdRef.current = null;
@@ -92,7 +95,6 @@ export function EditorPane({
   }, [markdown, note]);
 
   if (!note) {
-    currentNoteIdRef.current = null;
     return (
       <main className="editor-pane editor-pane--empty">
         <p>Local note storeを準備しています。</p>
@@ -101,7 +103,6 @@ export function EditorPane({
   }
 
   const activeNoteId = note.id;
-  currentNoteIdRef.current = activeNoteId;
 
   return (
     <main className="editor-pane" aria-label="選択中のNote">
@@ -243,7 +244,7 @@ export function EditorPane({
 
     const taskIndex = getTaskIndex(checkbox);
     if (taskIndex >= 0) {
-      toggleTask(taskIndex, captureTaskSelection(checkbox, taskIndex));
+      toggleTask(taskIndex, captureTaskSelectionSnapshot(activeNoteId, taskIndex, checkbox));
     }
   }
 
@@ -320,120 +321,14 @@ export function EditorPane({
     selection?.addRange(range);
   }
 
-  function captureTaskSelection(checkbox: HTMLElement, taskIndex: number): TaskSelectionSnapshot {
-    const selection = window.getSelection();
-    const selectedNode = selection?.anchorNode;
-    const offset =
-      selectedNode && checkbox.contains(selectedNode)
-        ? getTextOffset(checkbox, selectedNode, selection.anchorOffset)
-        : 0;
-
-    return {
-      noteId: activeNoteId,
-      taskIndex,
-      offset,
-      scrollPositions: captureScrollPositions(checkbox)
-    };
-  }
-
   function restoreTaskSelection(snapshot: TaskSelectionSnapshot) {
-    if (snapshot.noteId !== currentNoteIdRef.current) {
-      return;
-    }
-
     const checkbox = editorShellRef.current?.querySelectorAll('[role="checkbox"][aria-checked]')[
       snapshot.taskIndex
     ];
-    if (!(checkbox instanceof HTMLElement)) {
-      return;
-    }
-
-    restoreScrollPositions(snapshot.scrollPositions);
-    checkbox.focus({ preventScroll: true });
-
-    const position = findTextPosition(checkbox, snapshot.offset);
-    const range = document.createRange();
-    range.setStart(position.node, position.offset);
-    range.collapse(true);
-
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    restoreScrollPositions(snapshot.scrollPositions);
-    window.requestAnimationFrame(() => {
-      if (snapshot.noteId === currentNoteIdRef.current) {
-        restoreScrollPositions(snapshot.scrollPositions);
-      }
-    });
+    restoreTaskSelectionSnapshot(
+      snapshot,
+      () => currentNoteIdRef.current,
+      checkbox instanceof HTMLElement ? checkbox : null
+    );
   }
-}
-
-function captureScrollPositions(origin: HTMLElement): ScrollPositionSnapshot[] {
-  const targets = new Set<Element>();
-  const scrollingElement = document.scrollingElement;
-  if (scrollingElement) {
-    targets.add(scrollingElement);
-  }
-
-  let current: HTMLElement | null = origin;
-  while (current) {
-    if (current.scrollHeight > current.clientHeight || current.scrollWidth > current.clientWidth) {
-      targets.add(current);
-    }
-
-    current = current.parentElement;
-  }
-
-  return Array.from(targets).map((target) => ({
-    target,
-    top: target.scrollTop,
-    left: target.scrollLeft
-  }));
-}
-
-function restoreScrollPositions(scrollPositions: ScrollPositionSnapshot[]) {
-  for (const { target, top, left } of scrollPositions) {
-    target.scrollTop = top;
-    target.scrollLeft = left;
-  }
-}
-
-function getTextOffset(root: Node, target: Node, targetOffset: number): number {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let offset = 0;
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    if (node === target) {
-      return offset + targetOffset;
-    }
-
-    offset += node.textContent?.length ?? 0;
-  }
-
-  return offset;
-}
-
-function findTextPosition(root: Node, targetOffset: number): { node: Node; offset: number } {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let remainingOffset = targetOffset;
-  let lastTextNode: Node | null = null;
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    const textLength = node.textContent?.length ?? 0;
-    lastTextNode = node;
-
-    if (remainingOffset <= textLength) {
-      return { node, offset: remainingOffset };
-    }
-
-    remainingOffset -= textLength;
-  }
-
-  if (lastTextNode) {
-    return { node: lastTextNode, offset: lastTextNode.textContent?.length ?? 0 };
-  }
-
-  return { node: root, offset: 0 };
 }
