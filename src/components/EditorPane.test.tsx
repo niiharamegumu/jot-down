@@ -117,6 +117,32 @@ describe('EditorPane', () => {
     expect(onMarkdownChange).toHaveBeenCalledWith('- [x] 買い物\n- [x] メール返信');
   });
 
+  it('toggles the selected task with command enter', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange });
+
+    selectText(screen.getByText('メール返信').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'Enter',
+      metaKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] 買い物\n- [ ] メール返信');
+  });
+
+  it('ignores command enter when the selected line is not a task', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '本文\n- [ ] 買い物' });
+
+    selectText(screen.getByText('本文').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'Enter',
+      metaKey: true
+    });
+
+    expect(onMarkdownChange).not.toHaveBeenCalled();
+  });
+
   it('does not reset the editor while typing into a regular unchecked task', () => {
     const onMarkdownChange = vi.fn();
     renderEditor({ onMarkdownChange, markdown: '- [ ] a' });
@@ -197,4 +223,17 @@ function renderEditor(
       {...props}
     />
   );
+}
+
+function selectText(node: ChildNode | null) {
+  if (!node) {
+    throw new Error('Expected selectable text node');
+  }
+
+  const range = document.createRange();
+  range.selectNodeContents(node);
+
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
 }
