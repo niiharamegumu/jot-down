@@ -7,7 +7,7 @@ import {
   MDXEditor,
   type MDXEditorMethods
 } from '@mdxeditor/editor';
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import type { Note } from '../domain/note';
 import { normalizeSupportedMarkdown, toggleTaskAtIndex } from '../domain/note';
 import type { NoteTemplate } from '../domain/noteTemplate';
@@ -175,6 +175,7 @@ export function EditorPane({
         className="editor-shell"
         onBlurCapture={onFlush}
         onClickCapture={handleTaskClick}
+        onKeyDownCapture={handleTaskShortcut}
       >
         <MDXEditor
           ref={editorRef}
@@ -200,16 +201,49 @@ export function EditorPane({
       return;
     }
 
-    const checkboxes = Array.from(
-      event.currentTarget.querySelectorAll('[role="checkbox"][aria-checked]')
-    );
-    const taskIndex = checkboxes.indexOf(checkbox);
-    if (taskIndex < 0) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    toggleTask(checkbox);
+  }
+
+  function handleTaskShortcut(event: KeyboardEvent<HTMLElement>) {
+    if (!event.metaKey || event.key !== 'Enter') {
+      return;
+    }
+
+    const checkbox = getSelectedTaskCheckbox(event.currentTarget);
+    if (!checkbox) {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
+
+    toggleTask(checkbox);
+  }
+
+  function getSelectedTaskCheckbox(root: HTMLElement): HTMLElement | null {
+    const selection = window.getSelection();
+    const selectedNode = selection?.anchorNode;
+    if (!selectedNode || !root.contains(selectedNode)) {
+      return null;
+    }
+
+    const selectedElement =
+      selectedNode instanceof HTMLElement ? selectedNode : selectedNode.parentElement;
+    const checkbox = selectedElement?.closest('[role="checkbox"][aria-checked]');
+    return checkbox instanceof HTMLElement && root.contains(checkbox) ? checkbox : null;
+  }
+
+  function toggleTask(checkbox: HTMLElement) {
+    const checkboxes = Array.from(
+      editorShellRef.current?.querySelectorAll('[role="checkbox"][aria-checked]') ?? []
+    );
+    const taskIndex = checkboxes.indexOf(checkbox);
+    if (taskIndex < 0) {
+      return;
+    }
 
     const nextMarkdown = normalizeSupportedMarkdown(toggleTaskAtIndex(markdown, taskIndex));
     editorRef.current?.setMarkdown(nextMarkdown);
