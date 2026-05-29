@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorPane } from './EditorPane';
 
 const mockSetMarkdown = vi.fn();
@@ -65,6 +65,10 @@ const note = {
   updatedAt: '2026-05-27T03:15:00.000Z'
 };
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe('EditorPane', () => {
   it('shows local note store preparation while no note is selected', () => {
     render(
@@ -128,6 +132,99 @@ describe('EditorPane', () => {
     });
 
     expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] 買い物\n- [ ] メール返信');
+  });
+
+  it('keeps the cursor on the selected task after command enter', () => {
+    const animationFrameCallbacks: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      animationFrameCallbacks.push(callback);
+      return 1;
+    });
+
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange });
+    animationFrameCallbacks.at(-1)?.(0);
+    animationFrameCallbacks.length = 0;
+
+    const firstTaskText = screen.getByText('買い物').firstChild;
+    const secondTask = screen.getByText('メール返信');
+    const secondTaskText = secondTask.firstChild;
+    selectText(secondTaskText);
+
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'Enter',
+      metaKey: true
+    });
+    selectText(firstTaskText);
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] 買い物\n- [ ] メール返信');
+    expect(animationFrameCallbacks).toHaveLength(1);
+    const restoreCursor = animationFrameCallbacks.at(-1);
+    if (!restoreCursor) {
+      throw new Error('Expected cursor restoration to be scheduled');
+    }
+
+    restoreCursor?.(0);
+
+    const selection = window.getSelection();
+    const range = selection?.getRangeAt(0);
+    expect(range?.startContainer).toBe(secondTaskText);
+    expect(range?.startOffset).toBe(0);
+  });
+
+  it('does not restore the cursor after switching notes', () => {
+    const animationFrameCallbacks: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      animationFrameCallbacks.push(callback);
+      return 1;
+    });
+
+    const { rerender } = renderEditor();
+    animationFrameCallbacks.at(-1)?.(0);
+    animationFrameCallbacks.length = 0;
+
+    selectText(screen.getByText('メール返信').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'Enter',
+      metaKey: true
+    });
+
+    const staleRestoreCursor = animationFrameCallbacks.at(-1);
+    if (!staleRestoreCursor) {
+      throw new Error('Expected cursor restoration to be scheduled');
+    }
+
+    const nextNote = {
+      ...note,
+      id: 'note-2',
+      markdown: '- [ ] 別のNote'
+    };
+    rerender(
+      <EditorPane
+        note={nextNote}
+        markdown={nextNote.markdown}
+        updatedAt={nextNote.updatedAt}
+        applicableTemplates={[]}
+        storageError={null}
+        appUpdateAvailable={false}
+        isApplyingAppUpdate={false}
+        onMarkdownChange={vi.fn()}
+        onFlush={vi.fn()}
+        onApplyAppUpdate={vi.fn()}
+        onDeleteNote={vi.fn()}
+        onOpenTemplateManagement={vi.fn()}
+        onBackToList={vi.fn()}
+      />
+    );
+
+    const nextNoteText = screen.getByText('別のNote').firstChild;
+    selectText(nextNoteText);
+
+    staleRestoreCursor(0);
+
+    const selection = window.getSelection();
+    const range = selection?.getRangeAt(0);
+    expect(range?.startContainer).toBe(nextNoteText);
   });
 
   it('ignores command enter when the selected line is not a task', () => {

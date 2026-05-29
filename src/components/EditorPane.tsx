@@ -44,6 +44,12 @@ const updatedAtFormatter = new Intl.DateTimeFormat('ja-JP', {
   minute: '2-digit'
 });
 
+type TaskSelectionSnapshot = {
+  noteId: string;
+  taskIndex: number;
+  offset: number;
+};
+
 export function EditorPane({
   note,
   markdown,
@@ -84,6 +90,8 @@ export function EditorPane({
       </main>
     );
   }
+
+  const activeNoteId = note.id;
 
   return (
     <main className="editor-pane" aria-label="選択中のNote">
@@ -204,7 +212,10 @@ export function EditorPane({
     event.preventDefault();
     event.stopPropagation();
 
-    toggleTask(checkbox);
+    const taskIndex = getTaskIndex(checkbox);
+    if (taskIndex >= 0) {
+      toggleTask(taskIndex);
+    }
   }
 
   function handleTaskShortcut(event: KeyboardEvent<HTMLElement>) {
@@ -212,7 +223,7 @@ export function EditorPane({
       return;
     }
 
-    const checkbox = getSelectedTaskCheckbox(event.currentTarget);
+    const checkbox = getSelectedTaskCheckbox(event.currentTarget, event.target);
     if (!checkbox) {
       return;
     }
@@ -220,34 +231,49 @@ export function EditorPane({
     event.preventDefault();
     event.stopPropagation();
 
-    toggleTask(checkbox);
+    const taskIndex = getTaskIndex(checkbox);
+    if (taskIndex >= 0) {
+      toggleTask(taskIndex, captureTaskSelection(checkbox, taskIndex));
+    }
   }
 
-  function getSelectedTaskCheckbox(root: HTMLElement): HTMLElement | null {
+  function getSelectedTaskCheckbox(
+    root: HTMLElement,
+    eventTarget: EventTarget | null
+  ): HTMLElement | null {
     const selection = window.getSelection();
     const selectedNode = selection?.anchorNode;
-    if (!selectedNode || !root.contains(selectedNode)) {
-      return null;
+    if (selectedNode && root.contains(selectedNode)) {
+      const selectedElement =
+        selectedNode instanceof HTMLElement ? selectedNode : selectedNode.parentElement;
+      const checkbox = selectedElement?.closest('[role="checkbox"][aria-checked]');
+      if (checkbox instanceof HTMLElement && root.contains(checkbox)) {
+        return checkbox;
+      }
     }
 
-    const selectedElement =
-      selectedNode instanceof HTMLElement ? selectedNode : selectedNode.parentElement;
-    const checkbox = selectedElement?.closest('[role="checkbox"][aria-checked]');
-    return checkbox instanceof HTMLElement && root.contains(checkbox) ? checkbox : null;
+    const target = eventTarget instanceof HTMLElement ? eventTarget : null;
+    const targetCheckbox = target?.closest('[role="checkbox"][aria-checked]');
+    return targetCheckbox instanceof HTMLElement && root.contains(targetCheckbox)
+      ? targetCheckbox
+      : null;
   }
 
-  function toggleTask(checkbox: HTMLElement) {
+  function getTaskIndex(checkbox: HTMLElement): number {
     const checkboxes = Array.from(
       editorShellRef.current?.querySelectorAll('[role="checkbox"][aria-checked]') ?? []
     );
-    const taskIndex = checkboxes.indexOf(checkbox);
-    if (taskIndex < 0) {
-      return;
-    }
+    return checkboxes.indexOf(checkbox);
+  }
 
+  function toggleTask(taskIndex: number, selectionSnapshot: TaskSelectionSnapshot | null = null) {
     const nextMarkdown = normalizeSupportedMarkdown(toggleTaskAtIndex(markdown, taskIndex));
     editorRef.current?.setMarkdown(nextMarkdown);
     onMarkdownChange(nextMarkdown);
+
+    if (selectionSnapshot) {
+      window.requestAnimationFrame(() => restoreTaskSelection(selectionSnapshot));
+    }
   }
 
   function handleMarkdownChange(nextMarkdown: string) {
@@ -283,4 +309,83 @@ export function EditorPane({
     selection?.removeAllRanges();
     selection?.addRange(range);
   }
+
+  function captureTaskSelection(checkbox: HTMLElement, taskIndex: number): TaskSelectionSnapshot {
+    const selection = window.getSelection();
+    const selectedNode = selection?.anchorNode;
+    const offset =
+      selectedNode && checkbox.contains(selectedNode)
+        ? getTextOffset(checkbox, selectedNode, selection.anchorOffset)
+        : 0;
+
+    return {
+      noteId: activeNoteId,
+      taskIndex,
+      offset
+    };
+  }
+
+  function restoreTaskSelection(snapshot: TaskSelectionSnapshot) {
+    if (snapshot.noteId !== activeNoteId) {
+      return;
+    }
+
+    const checkbox = editorShellRef.current?.querySelectorAll('[role="checkbox"][aria-checked]')[
+      snapshot.taskIndex
+    ];
+    if (!(checkbox instanceof HTMLElement)) {
+      return;
+    }
+
+    checkbox.focus();
+
+    const position = findTextPosition(checkbox, snapshot.offset);
+    const range = document.createRange();
+    range.setStart(position.node, position.offset);
+    range.collapse(true);
+
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
+}
+
+function getTextOffset(root: Node, target: Node, targetOffset: number): number {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let offset = 0;
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node === target) {
+      return offset + targetOffset;
+    }
+
+    offset += node.textContent?.length ?? 0;
+  }
+
+  return offset;
+}
+
+function findTextPosition(root: Node, targetOffset: number): { node: Node; offset: number } {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let remainingOffset = targetOffset;
+  let lastTextNode: Node | null = null;
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const textLength = node.textContent?.length ?? 0;
+    lastTextNode = node;
+
+    if (remainingOffset <= textLength) {
+      return { node, offset: remainingOffset };
+    }
+
+    remainingOffset -= textLength;
+  }
+
+  if (lastTextNode) {
+    return { node: lastTextNode, offset: lastTextNode.textContent?.length ?? 0 };
+  }
+
+  return { node: root, offset: 0 };
 }
