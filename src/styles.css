@@ -78,16 +78,21 @@ button {
 }
 
 .note-list {
+  position: sticky;
+  top: 0;
   display: flex;
   flex-direction: column;
+  height: 100vh;
   min-height: 100vh;
   background: var(--sidebar);
-  overflow: visible;
+  overflow: hidden;
 }
 
 .pane-resizer {
-  position: relative;
+  position: sticky;
+  top: 0;
   width: 1px;
+  height: 100vh;
   min-height: 100vh;
   background: transparent;
   cursor: col-resize;
@@ -354,6 +359,7 @@ h2 {
 .note-list__items {
   display: flex;
   flex: 1;
+  min-height: 0;
   flex-direction: column;
   gap: 0;
   padding: 0 0.75rem 0.75rem;
@@ -450,11 +456,14 @@ h2 {
 }
 
 .template-sidebar {
+  position: sticky;
+  top: 0;
   display: flex;
+  height: 100vh;
   min-height: 100vh;
   flex-direction: column;
   background: var(--sidebar);
-  overflow: visible;
+  overflow: hidden;
 }
 
 .template-sidebar__header {
@@ -476,6 +485,7 @@ h2 {
 .template-list {
   display: flex;
   flex: 1;
+  min-height: 0;
   flex-direction: column;
   padding: 0.75rem;
   overflow: auto;
@@ -764,8 +774,11 @@ h2 {
   }
 
   .note-list {
+    position: static;
+    height: auto;
     min-height: 100vh;
     max-height: none;
+    overflow: visible;
   }
 
   .editor-pane {
@@ -803,12 +816,15 @@ h2 {
 
   .template-sidebar,
   .template-editor {
+    position: static;
+    height: auto;
     min-height: auto;
   }
 
   .template-sidebar {
     border-right: 0;
     border-bottom: 1px solid var(--line);
+    overflow: visible;
   }
 
   .template-list {
