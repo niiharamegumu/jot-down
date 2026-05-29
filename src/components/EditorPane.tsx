@@ -48,6 +48,13 @@ type TaskSelectionSnapshot = {
   noteId: string;
   taskIndex: number;
   offset: number;
+  scrollPositions: ScrollPositionSnapshot[];
+};
+
+type ScrollPositionSnapshot = {
+  target: Element;
+  top: number;
+  left: number;
 };
 
 export function EditorPane({
@@ -68,6 +75,7 @@ export function EditorPane({
   const editorRef = useRef<MDXEditorMethods>(null);
   const editorShellRef = useRef<HTMLElement>(null);
   const previousNoteIdRef = useRef<string | null>(null);
+  const currentNoteIdRef = useRef<string | null>(null);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -84,6 +92,7 @@ export function EditorPane({
   }, [markdown, note]);
 
   if (!note) {
+    currentNoteIdRef.current = null;
     return (
       <main className="editor-pane editor-pane--empty">
         <p>Local note storeを準備しています。</p>
@@ -92,6 +101,7 @@ export function EditorPane({
   }
 
   const activeNoteId = note.id;
+  currentNoteIdRef.current = activeNoteId;
 
   return (
     <main className="editor-pane" aria-label="選択中のNote">
@@ -321,12 +331,13 @@ export function EditorPane({
     return {
       noteId: activeNoteId,
       taskIndex,
-      offset
+      offset,
+      scrollPositions: captureScrollPositions(checkbox)
     };
   }
 
   function restoreTaskSelection(snapshot: TaskSelectionSnapshot) {
-    if (snapshot.noteId !== activeNoteId) {
+    if (snapshot.noteId !== currentNoteIdRef.current) {
       return;
     }
 
@@ -337,7 +348,8 @@ export function EditorPane({
       return;
     }
 
-    checkbox.focus();
+    restoreScrollPositions(snapshot.scrollPositions);
+    checkbox.focus({ preventScroll: true });
 
     const position = findTextPosition(checkbox, snapshot.offset);
     const range = document.createRange();
@@ -347,6 +359,42 @@ export function EditorPane({
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
+    restoreScrollPositions(snapshot.scrollPositions);
+    window.requestAnimationFrame(() => {
+      if (snapshot.noteId === currentNoteIdRef.current) {
+        restoreScrollPositions(snapshot.scrollPositions);
+      }
+    });
+  }
+}
+
+function captureScrollPositions(origin: HTMLElement): ScrollPositionSnapshot[] {
+  const targets = new Set<Element>();
+  const scrollingElement = document.scrollingElement;
+  if (scrollingElement) {
+    targets.add(scrollingElement);
+  }
+
+  let current: HTMLElement | null = origin;
+  while (current) {
+    if (current.scrollHeight > current.clientHeight || current.scrollWidth > current.clientWidth) {
+      targets.add(current);
+    }
+
+    current = current.parentElement;
+  }
+
+  return Array.from(targets).map((target) => ({
+    target,
+    top: target.scrollTop,
+    left: target.scrollLeft
+  }));
+}
+
+function restoreScrollPositions(scrollPositions: ScrollPositionSnapshot[]) {
+  for (const { target, top, left } of scrollPositions) {
+    target.scrollTop = top;
+    target.scrollLeft = left;
   }
 }
 

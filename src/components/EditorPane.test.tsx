@@ -172,6 +172,51 @@ describe('EditorPane', () => {
     expect(range?.startOffset).toBe(0);
   });
 
+  it('keeps the scroll position after command enter', () => {
+    const animationFrameCallbacks: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      animationFrameCallbacks.push(callback);
+      return 1;
+    });
+
+    const scrollingElement = document.createElement('div');
+    scrollingElement.scrollTop = 420;
+    scrollingElement.scrollLeft = 12;
+    const originalScrollingElementDescriptor = Object.getOwnPropertyDescriptor(
+      document,
+      'scrollingElement'
+    );
+    Object.defineProperty(document, 'scrollingElement', {
+      configurable: true,
+      get: () => scrollingElement
+    });
+
+    try {
+      renderEditor();
+      animationFrameCallbacks.at(-1)?.(0);
+      animationFrameCallbacks.length = 0;
+
+      selectText(screen.getByText('メール返信').firstChild);
+      fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+        key: 'Enter',
+        metaKey: true
+      });
+
+      scrollingElement.scrollTop = 0;
+      scrollingElement.scrollLeft = 0;
+      animationFrameCallbacks.at(-1)?.(0);
+
+      expect(scrollingElement.scrollTop).toBe(420);
+      expect(scrollingElement.scrollLeft).toBe(12);
+    } finally {
+      if (originalScrollingElementDescriptor) {
+        Object.defineProperty(document, 'scrollingElement', originalScrollingElementDescriptor);
+      } else {
+        Reflect.deleteProperty(document, 'scrollingElement');
+      }
+    }
+  });
+
   it('does not restore the cursor after switching notes', () => {
     const animationFrameCallbacks: FrameRequestCallback[] = [];
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
@@ -197,7 +242,7 @@ describe('EditorPane', () => {
     const nextNote = {
       ...note,
       id: 'note-2',
-      markdown: '- [ ] 別のNote'
+      markdown: '- [ ] 別のNote\n- [ ] 別タスク'
     };
     rerender(
       <EditorPane
@@ -218,6 +263,7 @@ describe('EditorPane', () => {
     );
 
     const nextNoteText = screen.getByText('別のNote').firstChild;
+    const otherTaskText = screen.getByText('別タスク').firstChild;
     selectText(nextNoteText);
 
     staleRestoreCursor(0);
@@ -225,6 +271,7 @@ describe('EditorPane', () => {
     const selection = window.getSelection();
     const range = selection?.getRangeAt(0);
     expect(range?.startContainer).toBe(nextNoteText);
+    expect(range?.startContainer).not.toBe(otherTaskText);
   });
 
   it('ignores command enter when the selected line is not a task', () => {
