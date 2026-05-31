@@ -20,9 +20,12 @@
   --selected-text: #ffffff;
   --hover: #e8e8e8;
   --checkbox-border: #b7b7b7;
+  --card-surface: rgba(255, 255, 255, 0.88);
+  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
   --icon-surface: rgba(255, 255, 255, 0.86);
   --icon-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-  --panel-shadow: 10px 0 28px rgba(0, 0, 0, 0.06);
+  --panel-shadow: 0 18px 44px rgba(0, 0, 0, 0.08);
+  --sidebar-card-gap: 0.75rem;
   --window-control-space: 5.5rem;
 }
 
@@ -43,9 +46,11 @@
     --selected-text: #111111;
     --hover: #303030;
     --checkbox-border: #777777;
+    --card-surface: rgba(255, 255, 255, 0.08);
+    --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
     --icon-surface: rgba(255, 255, 255, 0.1);
     --icon-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
-    --panel-shadow: 10px 0 28px rgba(0, 0, 0, 0.24);
+    --panel-shadow: 0 18px 44px rgba(0, 0, 0, 0.36);
   }
 }
 
@@ -87,12 +92,13 @@ button {
 .note-list {
   position: sticky;
   z-index: 1;
-  top: 0;
+  top: var(--sidebar-card-gap);
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  min-height: 100vh;
-  border-radius: 0 1.55rem 0 0;
+  height: calc(100vh - var(--sidebar-card-gap) * 2);
+  min-height: calc(100vh - var(--sidebar-card-gap) * 2);
+  margin: var(--sidebar-card-gap) 0 var(--sidebar-card-gap) var(--sidebar-card-gap);
+  border-radius: 1.55rem;
   background: var(--sidebar);
   box-shadow: var(--panel-shadow);
   overflow: hidden;
@@ -359,7 +365,7 @@ h2 {
 
 .search {
   display: block;
-  padding: 0 1.1rem 0.75rem;
+  padding: 0 1rem 0.75rem;
 }
 
 .search input {
@@ -381,7 +387,7 @@ h2 {
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  gap: 0;
+  gap: 0.55rem;
   padding: 0 0.75rem 0.75rem;
   overflow: auto;
 }
@@ -398,9 +404,10 @@ h2 {
   gap: 0.18rem 0.75rem;
   width: 100%;
   border: 0;
-  border-radius: 0.55rem;
+  border-radius: 0.9rem;
   padding: 0.72rem 0.85rem;
-  background: transparent;
+  background: var(--card-surface);
+  box-shadow: var(--card-shadow);
   cursor: pointer;
   text-align: left;
 }
@@ -476,12 +483,13 @@ h2 {
 .template-sidebar {
   position: sticky;
   z-index: 1;
-  top: 0;
+  top: var(--sidebar-card-gap);
   display: flex;
-  height: 100vh;
-  min-height: 100vh;
+  height: calc(100vh - var(--sidebar-card-gap) * 2);
+  min-height: calc(100vh - var(--sidebar-card-gap) * 2);
   flex-direction: column;
-  border-radius: 0 1.55rem 0 0;
+  margin: var(--sidebar-card-gap) 0 var(--sidebar-card-gap) var(--sidebar-card-gap);
+  border-radius: 1.55rem;
   background: var(--sidebar);
   box-shadow: var(--panel-shadow);
   overflow: hidden;
@@ -489,8 +497,9 @@ h2 {
 
 .template-sidebar__header {
   display: grid;
-  grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem;
+  grid-template-columns: minmax(0, 1fr) 2.5rem;
   align-items: center;
+  column-gap: 0.75rem;
   min-height: 3.4rem;
   padding: 0.55rem 1.25rem 0.35rem;
 }
@@ -498,9 +507,13 @@ h2 {
 .template-sidebar__header h1 {
   overflow: hidden;
   font-size: 1.05rem;
-  text-align: center;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.template-sidebar__header .icon-button {
+  justify-self: end;
 }
 
 .template-list {
@@ -508,8 +521,15 @@ h2 {
   flex: 1;
   min-height: 0;
   flex-direction: column;
+  gap: 0.55rem;
   padding: 0.75rem;
   overflow: auto;
+}
+
+.template-sidebar__footer {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0.65rem 1.25rem;
 }
 
 .template-card {
@@ -517,10 +537,11 @@ h2 {
   gap: 0.2rem;
   width: 100%;
   border: 0;
-  border-radius: 0.55rem;
+  border-radius: 0.9rem;
   padding: 0.72rem 0.85rem;
   color: var(--text);
-  background: transparent;
+  background: var(--card-surface);
+  box-shadow: var(--card-shadow);
   cursor: pointer;
   text-align: left;
 }
@@ -830,6 +851,7 @@ h2 {
     height: auto;
     min-height: 100vh;
     max-height: none;
+    margin: 0;
     overflow: visible;
   }
 
@@ -871,11 +893,12 @@ h2 {
     position: static;
     height: auto;
     min-height: auto;
+    margin: 0;
+    border-radius: 0;
   }
 
   .template-sidebar {
     border-right: 0;
-    border-bottom: 1px solid var(--line);
     overflow: visible;
   }
 

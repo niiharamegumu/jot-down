@@ -89,17 +89,6 @@ export function TemplateManager({
     >
       <aside className="template-sidebar" aria-label="テンプレート一覧">
         <div className="template-sidebar__header">
-          <button
-            className="back-button back-button--visible"
-            type="button"
-            onClick={onBackToNotes}
-            aria-label="Noteへ戻る"
-            data-tooltip="Noteへ戻る"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M15 5l-7 7 7 7" />
-            </svg>
-          </button>
           <h1>テンプレート</h1>
           <button
             className="icon-button"
@@ -138,6 +127,20 @@ export function TemplateManager({
               </button>
             );
           })}
+        </div>
+
+        <div className="template-sidebar__footer">
+          <button
+            className="back-button back-button--visible"
+            type="button"
+            onClick={onBackToNotes}
+            aria-label="Noteへ戻る"
+            data-tooltip="Noteへ戻る"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+          </button>
         </div>
       </aside>
       <div
