@@ -74,6 +74,32 @@ describe('Supported Markdown normalization', () => {
       '- [ ] task\n  - [x] done\n- bullet\n- [x] already'
     );
   });
+
+  it('converts plain web URLs to Markdown links', () => {
+    expect(normalizeSupportedMarkdown('参考 https://example.com/spec を見る')).toBe(
+      '参考 [https://example.com/spec](https://example.com/spec) を見る'
+    );
+  });
+
+  it('converts plain web URLs embedded in Japanese note text', () => {
+    expect(normalizeSupportedMarkdown('参考https://example.com/specを見る')).toBe(
+      '参考[https://example.com/spec](https://example.com/spec)を見る'
+    );
+  });
+
+  it('keeps existing Markdown links unchanged', () => {
+    expect(
+      normalizeSupportedMarkdown(
+        '参考 [仕様](https://example.com/spec) と [https://example.com](https://example.com)'
+      )
+    ).toBe('参考 [仕様](https://example.com/spec) と [https://example.com](https://example.com)');
+  });
+
+  it('leaves trailing sentence punctuation outside generated Markdown links', () => {
+    expect(normalizeSupportedMarkdown('参考 https://example.com/spec.')).toBe(
+      '参考 [https://example.com/spec](https://example.com/spec).'
+    );
+  });
 });
 
 describe('Task toggling', () => {

@@ -14,6 +14,7 @@ import {
   type NoteTemplate
 } from '../domain/noteTemplate';
 import { normalizeSupportedMarkdown } from '../domain/note';
+import { syncNormalizedEditorMarkdown } from './editorMarkdownSync';
 
 type TemplateManagerProps = {
   templates: NoteTemplate[];
@@ -224,7 +225,12 @@ export function TemplateManager({
               </div>
             ) : null}
 
-            <div ref={editorShellRef} className="editor-shell" onBlurCapture={onFlush}>
+            <div
+              ref={editorShellRef}
+              className="editor-shell"
+              onBlurCapture={handleEditorBlur}
+              onPasteCapture={handleEditorPaste}
+            >
               <MDXEditor
                 ref={editorRef}
                 markdown={selectedTemplate.markdown}
@@ -242,8 +248,8 @@ export function TemplateManager({
   );
 
   function focusEditorStart() {
-    const editor = editorShellRef.current?.querySelector('[contenteditable="true"]');
-    if (!(editor instanceof HTMLElement)) {
+    const editor = getEditorRoot();
+    if (!editor) {
       return;
     }
 
@@ -256,6 +262,29 @@ export function TemplateManager({
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
+  }
+
+  function handleEditorBlur() {
+    syncSelectedTemplateMarkdown();
+    onFlush();
+  }
+
+  function handleEditorPaste() {
+    window.requestAnimationFrame(syncSelectedTemplateMarkdown);
+  }
+
+  function syncSelectedTemplateMarkdown() {
+    syncNormalizedEditorMarkdown(
+      editorRef.current,
+      selectedTemplate?.markdown ?? '',
+      onChangeTemplateMarkdown,
+      getEditorRoot()
+    );
+  }
+
+  function getEditorRoot(): HTMLElement | null {
+    const editor = editorShellRef.current?.querySelector('[contenteditable="true"]');
+    return editor instanceof HTMLElement ? editor : null;
   }
 }
 

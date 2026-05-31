@@ -7,6 +7,9 @@ export type Note = {
 export const UNTITLED_NOTE_TITLE = '無題';
 
 const headingPattern = /^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/;
+const markdownLinkPattern = /\[[^\]]+\]\([^)]+\)/g;
+const plainWebUrlPattern = /https?:\/\/[A-Za-z0-9\-._~:/?#@!$&'*+,;=%]+/g;
+const trailingUrlPunctuationPattern = /[.,!?;:]+$/;
 
 export function createNote(markdown = '', id: string = crypto.randomUUID()): Note {
   return {
@@ -55,13 +58,15 @@ export function normalizeSupportedMarkdown(markdown: string): string {
   return markdown
     .split(/\r?\n/)
     .map((line) =>
-      line
-        .replace(/^(\s*)\*\s+\[( |x|X)\]\s+/, (_, indent: string, marker: string) => {
-          const checked = marker.toLowerCase() === 'x' ? 'x' : ' ';
-          return `${indent}- [${checked}] `;
-        })
-        .replace(/^(\s*)-\s+\[(X)\]\s+/, '$1- [x] ')
-        .replace(/^(\s*)\*\s+/, '$1- ')
+      normalizePlainLinks(
+        line
+          .replace(/^(\s*)\*\s+\[( |x|X)\]\s+/, (_, indent: string, marker: string) => {
+            const checked = marker.toLowerCase() === 'x' ? 'x' : ' ';
+            return `${indent}- [${checked}] `;
+          })
+          .replace(/^(\s*)-\s+\[(X)\]\s+/, '$1- [x] ')
+          .replace(/^(\s*)\*\s+/, '$1- ')
+      )
     )
     .join('\n');
 }
@@ -103,4 +108,33 @@ function stripMarkdownChrome(value: string): string {
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizePlainLinks(line: string): string {
+  const markdownLinkRanges = getMarkdownLinkRanges(line);
+
+  return line.replace(plainWebUrlPattern, (rawUrl, offset) => {
+    if (isInsideRange(offset, markdownLinkRanges) || isAngleBracketAutolink(line, offset, rawUrl)) {
+      return rawUrl;
+    }
+
+    const punctuation = rawUrl.match(trailingUrlPunctuationPattern)?.[0] ?? '';
+    const url = punctuation ? rawUrl.slice(0, -punctuation.length) : rawUrl;
+    return `[${url}](${url})${punctuation}`;
+  });
+}
+
+function getMarkdownLinkRanges(line: string): Array<{ start: number; end: number }> {
+  return Array.from(line.matchAll(markdownLinkPattern), (match) => ({
+    start: match.index ?? 0,
+    end: (match.index ?? 0) + match[0].length
+  }));
+}
+
+function isInsideRange(offset: number, ranges: Array<{ start: number; end: number }>): boolean {
+  return ranges.some((range) => offset >= range.start && offset < range.end);
+}
+
+function isAngleBracketAutolink(line: string, offset: number, rawUrl: string): boolean {
+  return line[offset - 1] === '<' && line[offset + rawUrl.length] === '>';
 }
