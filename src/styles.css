@@ -276,8 +276,10 @@ h2 {
   transform: none;
 }
 
-.template-sidebar__header .back-button[data-tooltip]::after {
+.template-sidebar__footer .back-button[data-tooltip]::after {
+  top: auto;
   right: auto;
+  bottom: calc(100% + 0.35rem);
   left: 0;
   transform: none;
 }
@@ -496,24 +498,11 @@ h2 {
 }
 
 .template-sidebar__header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 2.5rem;
+  display: flex;
   align-items: center;
-  column-gap: 0.75rem;
+  justify-content: flex-end;
   min-height: 3.4rem;
   padding: 0.55rem 1.25rem 0.35rem;
-}
-
-.template-sidebar__header h1 {
-  overflow: hidden;
-  font-size: 1.05rem;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.template-sidebar__header .icon-button {
-  justify-self: end;
 }
 
 .template-list {

@@ -89,7 +89,6 @@ export function TemplateManager({
     >
       <aside className="template-sidebar" aria-label="テンプレート一覧">
         <div className="template-sidebar__header">
-          <h1>テンプレート</h1>
           <button
             className="icon-button"
             type="button"
