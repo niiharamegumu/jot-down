@@ -18,6 +18,7 @@ import {
 import type { Note } from '../domain/note';
 import { normalizeSupportedMarkdown, toggleTaskAtIndex } from '../domain/note';
 import type { NoteTemplate } from '../domain/noteTemplate';
+import { syncNormalizedEditorMarkdown as syncNormalizedMarkdownFromEditor } from './editorMarkdownSync';
 import {
   captureTaskSelectionSnapshot,
   restoreTaskSelectionSnapshot,
@@ -192,9 +193,10 @@ export function EditorPane({
       <section
         ref={editorShellRef}
         className="editor-shell"
-        onBlurCapture={onFlush}
+        onBlurCapture={handleEditorBlur}
         onClickCapture={handleTaskClick}
         onKeyDownCapture={handleTaskShortcut}
+        onPasteCapture={handleEditorPaste}
       >
         <MDXEditor
           ref={editorRef}
@@ -291,6 +293,24 @@ export function EditorPane({
     onMarkdownChange(normalizeSupportedMarkdown(nextMarkdown));
   }
 
+  function handleEditorBlur() {
+    syncNormalizedEditorMarkdown();
+    onFlush();
+  }
+
+  function handleEditorPaste() {
+    window.requestAnimationFrame(syncNormalizedEditorMarkdown);
+  }
+
+  function syncNormalizedEditorMarkdown() {
+    syncNormalizedMarkdownFromEditor(
+      editorRef.current,
+      markdown,
+      onMarkdownChange,
+      getEditorRoot()
+    );
+  }
+
   function handleInsertTemplate(templateMarkdown: string) {
     editorRef.current?.focus(() => {
       editorRef.current?.insertMarkdown(templateMarkdown);
@@ -305,8 +325,8 @@ export function EditorPane({
   }
 
   function focusEditorStart() {
-    const editor = editorShellRef.current?.querySelector('[contenteditable="true"]');
-    if (!(editor instanceof HTMLElement)) {
+    const editor = getEditorRoot();
+    if (!editor) {
       return;
     }
 
@@ -319,6 +339,11 @@ export function EditorPane({
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
+  }
+
+  function getEditorRoot(): HTMLElement | null {
+    const editor = editorShellRef.current?.querySelector('[contenteditable="true"]');
+    return editor instanceof HTMLElement ? editor : null;
   }
 
   function restoreTaskSelection(snapshot: TaskSelectionSnapshot) {

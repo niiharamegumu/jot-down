@@ -301,6 +301,27 @@ describe('EditorPane', () => {
     expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] aa');
   });
 
+  it('reimports pasted plain URLs as Markdown links so they become clickable', () => {
+    const animationFrameCallbacks: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      animationFrameCallbacks.push(callback);
+      return 1;
+    });
+    const onMarkdownChange = vi.fn();
+    mockGetMarkdown.mockReturnValue('参考https://example.com/specを見る');
+    renderEditor({ onMarkdownChange });
+    animationFrameCallbacks.at(-1)?.(0);
+    animationFrameCallbacks.length = 0;
+    mockSetMarkdown.mockClear();
+
+    fireEvent.paste(screen.getByLabelText('Markdown editor'));
+    animationFrameCallbacks.at(-1)?.(0);
+
+    const normalizedMarkdown = '参考[https://example.com/spec](https://example.com/spec)を見る';
+    expect(mockSetMarkdown).toHaveBeenCalledWith(normalizedMarkdown);
+    expect(onMarkdownChange).toHaveBeenCalledWith(normalizedMarkdown);
+  });
+
   it('flushes note changes when editing focus leaves the editor', () => {
     const onFlush = vi.fn();
     renderEditor({ onFlush });
