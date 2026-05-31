@@ -20,6 +20,7 @@
   --selected-text: #ffffff;
   --hover: #e8e8e8;
   --checkbox-border: #b7b7b7;
+  --window-control-space: 5.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -744,6 +745,43 @@ h2 {
 
 .jot-editor:focus {
   outline: none;
+}
+
+@media (display-mode: window-controls-overlay) {
+  .app-shell,
+  .template-manager {
+    border-top: 0;
+  }
+
+  .note-list__header,
+  .editor-toolbar,
+  .template-sidebar__header,
+  .template-editor__toolbar {
+    -webkit-app-region: drag;
+  }
+
+  .note-list__header {
+    min-height: max(3.4rem, env(titlebar-area-height, 0px));
+    padding-left: max(1.25rem, var(--window-control-space));
+  }
+
+  .template-sidebar__header {
+    min-height: max(3.4rem, env(titlebar-area-height, 0px));
+    padding-left: max(1.25rem, var(--window-control-space));
+  }
+
+  .editor-toolbar,
+  .template-editor__toolbar {
+    min-height: max(3.4rem, env(titlebar-area-height, 0px));
+  }
+
+  button,
+  input,
+  .pane-resizer,
+  .editor-shell,
+  .template-popover {
+    -webkit-app-region: no-drag;
+  }
 }
 
 .visually-hidden {
