@@ -23,10 +23,13 @@ describe('NoteList', () => {
         notes={notes}
         selectedNoteId="note-1"
         query=""
+        isListNavCollapsed={false}
         onQueryChange={vi.fn()}
         onCreateNote={vi.fn()}
         onSelectNote={vi.fn()}
         onOpenTemplateManagement={vi.fn()}
+        onToggleListNav={vi.fn()}
+        onHideListNavPeek={vi.fn()}
       />
     );
 
@@ -53,10 +56,13 @@ describe('NoteList', () => {
         notes={notes}
         selectedNoteId={null}
         query=""
+        isListNavCollapsed={false}
         onQueryChange={onQueryChange}
         onCreateNote={onCreateNote}
         onSelectNote={onSelectNote}
         onOpenTemplateManagement={onOpenTemplateManagement}
+        onToggleListNav={vi.fn()}
+        onHideListNavPeek={vi.fn()}
       />
     );
 
@@ -69,5 +75,39 @@ describe('NoteList', () => {
     expect(onCreateNote).toHaveBeenCalledTimes(1);
     expect(onSelectNote).toHaveBeenCalledWith('note-2');
     expect(onOpenTemplateManagement).toHaveBeenCalledTimes(1);
+  });
+
+  it('collapses to a list navigation toggle', async () => {
+    const user = userEvent.setup();
+    const onToggleListNav = vi.fn();
+
+    render(
+      <NoteList
+        notes={notes}
+        selectedNoteId="note-1"
+        query=""
+        isListNavCollapsed={true}
+        onQueryChange={vi.fn()}
+        onCreateNote={vi.fn()}
+        onSelectNote={vi.fn()}
+        onOpenTemplateManagement={vi.fn()}
+        onToggleListNav={onToggleListNav}
+        onHideListNavPeek={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'Note一覧を開く' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    expect(screen.getByRole('complementary', { name: 'Notes' })).toHaveClass(
+      'note-list--collapsed'
+    );
+    expect(screen.getByRole('searchbox', { name: 'Noteを検索' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'テンプレート管理' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Note一覧を開く' }));
+
+    expect(onToggleListNav).toHaveBeenCalledTimes(1);
   });
 });

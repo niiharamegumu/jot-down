@@ -16,6 +16,10 @@ _Avoid_: Save button, draft state, persistent saved indicator
 The browser-resident place where notes and note templates are kept for offline use on the current device. Each device has its own local note store; it has no user account owner, is expected to retain notes and note templates during normal use of that browser, and does not include cross-tab conflict resolution, user-managed Markdown files, or synced cloud storage. If the local note store is unavailable, the app should make saving unavailable clear rather than pretending notes or note templates can be kept.
 _Avoid_: Local folder, cloud sync, file vault, account, import/export
 
+**List navigation**:
+The user-facing navigation area for moving between notes or between note templates. List navigation may be opened or closed as a local display preference, but closing it does not change note order, note search, note template management, or the selected note or note template.
+_Avoid_: Folder tree, file explorer, notebook switcher
+
 **Markdown live editing**:
 A single editing surface where Markdown text remains the source of truth while task markers and headings are visually structured in place as the user types. Editing behavior follows the Markdown editor's native list and task semantics rather than preserving app-specific empty task states, while focused blocks must keep their visual scale and layout stable enough that cursor placement does not cause distracting typography or position shifts.
 _Avoid_: Separate preview, rendered-only document, edit/preview mode, layout-shifting focus state, block-type menu

@@ -21,6 +21,8 @@ type TemplateManagerProps = {
   templates: NoteTemplate[];
   selectedTemplateId: string | null;
   sidebarWidth: number;
+  isListNavCollapsed: boolean;
+  isListNavPeeking: boolean;
   isResizingSidebar: boolean;
   storageError: string | null;
   onCreateTemplate: () => void;
@@ -33,6 +35,9 @@ type TemplateManagerProps = {
   onResizePointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   onResizeKeyDown: (direction: 'narrower' | 'wider') => void;
   onBackToNotes: () => void;
+  onToggleListNav: () => void;
+  onPeekListNav: () => void;
+  onHideListNavPeek: () => void;
 };
 
 const editorPlugins = [
@@ -48,6 +53,8 @@ export function TemplateManager({
   templates,
   selectedTemplateId,
   sidebarWidth,
+  isListNavCollapsed,
+  isListNavPeeking,
   isResizingSidebar,
   storageError,
   onCreateTemplate,
@@ -59,7 +66,10 @@ export function TemplateManager({
   onCreateNoteFromTemplate,
   onResizePointerDown,
   onResizeKeyDown,
-  onBackToNotes
+  onBackToNotes,
+  onToggleListNav,
+  onPeekListNav,
+  onHideListNavPeek
 }: TemplateManagerProps) {
   const editorRef = useRef<MDXEditorMethods>(null);
   const editorShellRef = useRef<HTMLDivElement>(null);
@@ -87,11 +97,18 @@ export function TemplateManager({
 
   return (
     <main
-      className={`template-manager${isResizingSidebar ? ' template-manager--resizing' : ''}`}
+      className={`template-manager${isListNavCollapsed ? ' template-manager--list-nav-collapsed' : ''}${isListNavPeeking ? ' template-manager--list-nav-peeking' : ''}${isResizingSidebar ? ' template-manager--resizing' : ''}`}
       aria-label="テンプレート管理"
       style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
     >
-      <aside className="template-sidebar" aria-label="テンプレート一覧">
+      {isListNavCollapsed ? (
+        <div className="list-nav-peek-zone" aria-hidden="true" onMouseEnter={onPeekListNav} />
+      ) : null}
+      <aside
+        className={`template-sidebar${isListNavCollapsed ? ' template-sidebar--collapsed' : ''}`}
+        aria-label="テンプレート一覧"
+        onMouseLeave={onHideListNavPeek}
+      >
         <div className="template-sidebar__header">
           <button
             className="icon-button"
@@ -134,39 +151,61 @@ export function TemplateManager({
 
         <div className="template-sidebar__footer">
           <button
-            className="back-button back-button--visible"
+            className="icon-button"
             type="button"
-            onClick={onBackToNotes}
-            aria-label="Noteへ戻る"
-            data-tooltip="Noteへ戻る"
+            onClick={onToggleListNav}
+            aria-label={isListNavCollapsed ? 'テンプレート一覧を開く' : 'テンプレート一覧を閉じる'}
+            aria-expanded={!isListNavCollapsed}
+            data-tooltip={
+              isListNavCollapsed ? 'テンプレート一覧を開く' : 'テンプレート一覧を閉じる'
+            }
           >
             <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M15 5l-7 7 7 7" />
+              <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5z" />
+              <path d="M9 3v18" />
+              <path d="M6.5 7h.01" />
+              <path d="M6.5 11h.01" />
+            </svg>
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onBackToNotes}
+            aria-label="Note一覧へ移動"
+            data-tooltip="Note一覧へ移動"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M6 4h12v16H6z" />
+              <path d="M9 8h6" />
+              <path d="M9 12h6" />
+              <path d="M9 16h4" />
             </svg>
           </button>
         </div>
       </aside>
-      <div
-        className="pane-resizer"
-        role="separator"
-        aria-label="テンプレート一覧の幅を変更"
-        aria-orientation="vertical"
-        aria-valuemin={260}
-        aria-valuemax={520}
-        aria-valuenow={sidebarWidth}
-        tabIndex={0}
-        onPointerDown={onResizePointerDown}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowLeft') {
-            event.preventDefault();
-            onResizeKeyDown('narrower');
-          }
-          if (event.key === 'ArrowRight') {
-            event.preventDefault();
-            onResizeKeyDown('wider');
-          }
-        }}
-      />
+      {!isListNavCollapsed ? (
+        <div
+          className="pane-resizer"
+          role="separator"
+          aria-label="テンプレート一覧の幅を変更"
+          aria-orientation="vertical"
+          aria-valuemin={260}
+          aria-valuemax={520}
+          aria-valuenow={sidebarWidth}
+          tabIndex={0}
+          onPointerDown={onResizePointerDown}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft') {
+              event.preventDefault();
+              onResizeKeyDown('narrower');
+            }
+            if (event.key === 'ArrowRight') {
+              event.preventDefault();
+              onResizeKeyDown('wider');
+            }
+          }}
+        />
+      ) : null}
 
       <section className="template-editor" aria-label="選択中のテンプレート">
         {!selectedTemplate ? (

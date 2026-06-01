@@ -137,4 +137,45 @@ describe('App', () => {
     expect(await screen.findByRole('option', { name: /会議/ })).toBeInTheDocument();
     expect(putNoteMock).toHaveBeenCalledWith(expect.objectContaining({ markdown: '# 会議' }));
   });
+
+  it('keeps list navigation collapsed across note and template views', async () => {
+    const user = userEvent.setup();
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'note',
+        markdown: '# 既存',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      }
+    ]);
+    loadNoteTemplatesMock.mockResolvedValue([
+      {
+        id: 'template',
+        name: '会議',
+        markdown: '# 会議',
+        updatedAt: '2026-05-28T00:00:00.000Z'
+      }
+    ]);
+    putNoteMock.mockResolvedValue();
+
+    const { unmount } = render(<App />);
+
+    await screen.findByRole('option', { name: /既存/ });
+    await user.click(screen.getByRole('button', { name: 'Note一覧を閉じる' }));
+
+    expect(screen.getByRole('button', { name: 'Note一覧を開く' })).toBeInTheDocument();
+    expect(document.querySelector('.list-nav-peek-zone')).toBeInTheDocument();
+    expect(window.localStorage.getItem('jot-down-list-nav-collapsed')).toBe('true');
+
+    unmount();
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: 'Note一覧を開く' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Note一覧を開く' }));
+    await user.click(screen.getByRole('button', { name: 'テンプレート管理' }));
+    await user.click(screen.getByRole('button', { name: 'テンプレート一覧を閉じる' }));
+
+    expect(screen.getByRole('button', { name: 'テンプレート一覧を開く' })).toBeInTheDocument();
+    expect(window.localStorage.getItem('jot-down-list-nav-collapsed')).toBe('true');
+  });
 });
