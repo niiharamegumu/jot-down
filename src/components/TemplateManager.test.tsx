@@ -133,7 +133,10 @@ function renderManager(props: Partial<React.ComponentProps<typeof TemplateManage
     <TemplateManager
       templates={[]}
       selectedTemplateId={null}
+      mobileView="list"
       sidebarWidth={360}
+      isSmallScreen={false}
+      canToggleListNav={true}
       isListNavCollapsed={false}
       isListNavPeeking={false}
       isResizingSidebar={false}
@@ -148,6 +151,7 @@ function renderManager(props: Partial<React.ComponentProps<typeof TemplateManage
       onResizePointerDown={vi.fn()}
       onResizeKeyDown={vi.fn()}
       onBackToNotes={vi.fn()}
+      onBackToTemplateList={vi.fn()}
       onToggleListNav={vi.fn()}
       onPeekListNav={vi.fn()}
       onHideListNavPeek={vi.fn()}

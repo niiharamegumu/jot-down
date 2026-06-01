@@ -292,7 +292,91 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'テンプレート一覧を開く' })).toBeInTheDocument();
     expect(window.localStorage.getItem('jot-down-list-nav-collapsed')).toBe('true');
   });
+
+  it('uses separate note template list and detail views on small screens without list navigation toggles', async () => {
+    const user = userEvent.setup();
+    const restoreMatchMedia = mockSmallScreen();
+    window.localStorage.setItem('jot-down-list-nav-collapsed', 'true');
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'note',
+        markdown: '# 既存',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      }
+    ]);
+    loadNoteTemplatesMock.mockResolvedValue([
+      {
+        id: 'template',
+        name: '会議',
+        markdown: '# 会議',
+        updatedAt: '2026-05-28T00:00:00.000Z'
+      }
+    ]);
+    putNoteMock.mockResolvedValue();
+    putNoteTemplateMock.mockResolvedValue();
+
+    try {
+      render(<App />);
+
+      await screen.findByRole('option', { name: /既存/ });
+
+      expect(screen.queryByRole('button', { name: 'Note一覧を開く' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Note一覧を閉じる' })).not.toBeInTheDocument();
+      expect(document.querySelector('.list-nav-peek-zone')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'テンプレート管理' }));
+
+      expect(screen.getByRole('option', { name: /会議/ })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Markdown editor')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'テンプレート一覧を閉じる' })
+      ).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('option', { name: /会議/ }));
+
+      expect(screen.getByLabelText('Markdown editor')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'テンプレート一覧へ戻る' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: /会議/ })).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'テンプレート一覧へ戻る' }));
+
+      expect(screen.getByRole('option', { name: /会議/ })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Markdown editor')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: '新しいテンプレートを作成' }));
+
+      expect(screen.getByRole('button', { name: 'テンプレート一覧へ戻る' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Markdown editor')).toBeInTheDocument();
+    } finally {
+      restoreMatchMedia();
+    }
+  });
 });
+
+function mockSmallScreen() {
+  const originalMatchMedia = window.matchMedia;
+
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string): MediaQueryList => ({
+      matches: query === '(max-width: 760px)',
+      media: query,
+      onchange: null,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      dispatchEvent: () => false
+    })
+  });
+
+  return () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: originalMatchMedia
+    });
+  };
+}
 
 function mockClipboard(writeText: (value: string) => Promise<void>) {
   const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');

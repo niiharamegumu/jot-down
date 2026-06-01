@@ -17,7 +17,7 @@ The browser-resident place where notes and note templates are kept for offline u
 _Avoid_: Local folder, cloud sync, file vault, account, import/export
 
 **List navigation**:
-The user-facing navigation area for moving between notes or between note templates. List navigation may be opened or closed as a local display preference, but closing it does not change note order, note search, note template management, or the selected note or note template.
+The user-facing navigation area for moving between notes or between note templates. List navigation may be opened or closed as a local display preference only when the layout can keep list and detail visible as separate regions; on small-screen layouts it is a separate list view rather than a collapsible region. Closing it does not change note order, note search, note template management, or the selected note or note template.
 _Avoid_: Folder tree, file explorer, notebook switcher
 
 **Markdown live editing**:
