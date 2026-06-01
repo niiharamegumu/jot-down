@@ -5,10 +5,13 @@ type NoteListProps = {
   notes: Note[];
   selectedNoteId: string | null;
   query: string;
+  isListNavCollapsed: boolean;
   onQueryChange: (query: string) => void;
   onCreateNote: () => void;
   onSelectNote: (noteId: string) => void;
   onOpenTemplateManagement: () => void;
+  onToggleListNav: () => void;
+  onHideListNavPeek: () => void;
 };
 
 const dateFormatter = new Intl.DateTimeFormat('ja-JP', {
@@ -22,13 +25,20 @@ export function NoteList({
   notes,
   selectedNoteId,
   query,
+  isListNavCollapsed,
   onQueryChange,
   onCreateNote,
   onSelectNote,
-  onOpenTemplateManagement
+  onOpenTemplateManagement,
+  onToggleListNav,
+  onHideListNavPeek
 }: NoteListProps) {
   return (
-    <aside className="note-list" aria-label="Notes">
+    <aside
+      className={`note-list${isListNavCollapsed ? ' note-list--collapsed' : ''}`}
+      aria-label="Notes"
+      onMouseLeave={onHideListNavPeek}
+    >
       <div className="note-list__header">
         <button
           className="icon-button"
@@ -80,6 +90,21 @@ export function NoteList({
       </div>
 
       <div className="note-list__footer">
+        <button
+          className="icon-button"
+          type="button"
+          onClick={onToggleListNav}
+          aria-label={isListNavCollapsed ? 'Note一覧を開く' : 'Note一覧を閉じる'}
+          aria-expanded={!isListNavCollapsed}
+          data-tooltip={isListNavCollapsed ? 'Note一覧を開く' : 'Note一覧を閉じる'}
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5z" />
+            <path d="M9 3v18" />
+            <path d="M6.5 7h.01" />
+            <path d="M6.5 11h.01" />
+          </svg>
+        </button>
         <button
           className="icon-button"
           type="button"

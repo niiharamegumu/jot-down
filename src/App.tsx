@@ -34,6 +34,7 @@ const starterMarkdown = `# 今日やること
 
 const starterNoteId = 'starter-note';
 const sidebarWidthStorageKey = 'jot-down-sidebar-width';
+const listNavCollapsedStorageKey = 'jot-down-list-nav-collapsed';
 const minSidebarWidth = 260;
 const maxSidebarWidth = 520;
 
@@ -48,6 +49,8 @@ export function App() {
   const [query, setQuery] = useState('');
   const [storageError, setStorageError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => loadSidebarWidth());
+  const [isListNavCollapsed, setIsListNavCollapsed] = useState(() => loadListNavCollapsed());
+  const [isListNavPeeking, setIsListNavPeeking] = useState(false);
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('list');
   const [appView, setAppView] = useState<'notes' | 'templates'>('notes');
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
@@ -419,6 +422,8 @@ export function App() {
         )}
         selectedTemplateId={selectedTemplateId}
         sidebarWidth={sidebarWidth}
+        isListNavCollapsed={isListNavCollapsed}
+        isListNavPeeking={isListNavPeeking}
         isResizingSidebar={isResizingSidebar}
         storageError={storageError}
         onCreateTemplate={handleCreateTemplate}
@@ -436,6 +441,9 @@ export function App() {
           void persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
           setAppView('notes');
         }}
+        onToggleListNav={toggleListNav}
+        onPeekListNav={() => setIsListNavPeeking(true)}
+        onHideListNavPeek={() => setIsListNavPeeking(false)}
       />
     );
   }
@@ -443,39 +451,51 @@ export function App() {
   return (
     <div
       ref={shellRef}
-      className={`app-shell app-shell--${mobileView}${isResizingSidebar ? ' app-shell--resizing' : ''}`}
+      className={`app-shell app-shell--${mobileView}${isListNavCollapsed ? ' app-shell--list-nav-collapsed' : ''}${isListNavPeeking ? ' app-shell--list-nav-peeking' : ''}${isResizingSidebar ? ' app-shell--resizing' : ''}`}
       style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
     >
+      {isListNavCollapsed ? (
+        <div
+          className="list-nav-peek-zone"
+          aria-hidden="true"
+          onMouseEnter={() => setIsListNavPeeking(true)}
+        />
+      ) : null}
       <NoteList
         notes={visibleNotes}
         selectedNoteId={selectedNoteId}
         query={query}
+        isListNavCollapsed={isListNavCollapsed}
         onQueryChange={handleQueryChange}
         onCreateNote={handleCreateNote}
         onSelectNote={handleSelectNote}
         onOpenTemplateManagement={() => setAppView('templates')}
+        onToggleListNav={toggleListNav}
+        onHideListNavPeek={() => setIsListNavPeeking(false)}
       />
-      <div
-        className="pane-resizer"
-        role="separator"
-        aria-label="Note一覧の幅を変更"
-        aria-orientation="vertical"
-        aria-valuemin={minSidebarWidth}
-        aria-valuemax={maxSidebarWidth}
-        aria-valuenow={sidebarWidth}
-        tabIndex={0}
-        onPointerDown={handleResizePointerDown}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowLeft') {
-            event.preventDefault();
-            commitSidebarWidth(sidebarWidth - 16);
-          }
-          if (event.key === 'ArrowRight') {
-            event.preventDefault();
-            commitSidebarWidth(sidebarWidth + 16);
-          }
-        }}
-      />
+      {!isListNavCollapsed ? (
+        <div
+          className="pane-resizer"
+          role="separator"
+          aria-label="Note一覧の幅を変更"
+          aria-orientation="vertical"
+          aria-valuemin={minSidebarWidth}
+          aria-valuemax={maxSidebarWidth}
+          aria-valuenow={sidebarWidth}
+          tabIndex={0}
+          onPointerDown={handleResizePointerDown}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft') {
+              event.preventDefault();
+              commitSidebarWidth(sidebarWidth - 16);
+            }
+            if (event.key === 'ArrowRight') {
+              event.preventDefault();
+              commitSidebarWidth(sidebarWidth + 16);
+            }
+          }}
+        />
+      ) : null}
       <EditorPane
         note={selectedNote}
         markdown={activeMarkdown}
@@ -571,6 +591,15 @@ export function App() {
     setSidebarWidth(nextWidth);
     window.localStorage.setItem(sidebarWidthStorageKey, String(nextWidth));
   }
+
+  function toggleListNav() {
+    setIsListNavCollapsed((currentValue) => {
+      const nextValue = !currentValue;
+      window.localStorage.setItem(listNavCollapsedStorageKey, String(nextValue));
+      setIsListNavPeeking(false);
+      return nextValue;
+    });
+  }
 }
 
 function getStorageErrorMessage(error: unknown): string {
@@ -588,6 +617,10 @@ function loadSidebarWidth(): number {
   }
 
   return Math.min(maxSidebarWidth, Math.max(minSidebarWidth, storedValue));
+}
+
+function loadListNavCollapsed(): boolean {
+  return window.localStorage.getItem(listNavCollapsedStorageKey) === 'true';
 }
 
 function isRunningAsInstalledPwa(): boolean {

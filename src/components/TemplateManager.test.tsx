@@ -98,6 +98,34 @@ describe('TemplateManager', () => {
     expect(mockSetMarkdown).toHaveBeenCalledWith(normalizedMarkdown);
     expect(onChangeTemplateMarkdown).toHaveBeenCalledWith(normalizedMarkdown);
   });
+
+  it('collapses to a template list navigation toggle', () => {
+    const onToggleListNav = vi.fn();
+
+    renderManager({
+      isListNavCollapsed: true,
+      templates: [
+        {
+          id: 'template-1',
+          name: '会議',
+          markdown: '# 会議',
+          updatedAt: '2026-05-28T00:00:00.000Z'
+        }
+      ],
+      selectedTemplateId: 'template-1',
+      onToggleListNav
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'テンプレート一覧を開く' }));
+
+    expect(screen.getByRole('complementary', { name: 'テンプレート一覧' })).toHaveClass(
+      'template-sidebar--collapsed'
+    );
+    expect(screen.getByRole('option', { name: /会議/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Noteへ戻る' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Note一覧へ移動' })).toBeInTheDocument();
+    expect(onToggleListNav).toHaveBeenCalledTimes(1);
+  });
 });
 
 function renderManager(props: Partial<React.ComponentProps<typeof TemplateManager>> = {}) {
@@ -106,6 +134,8 @@ function renderManager(props: Partial<React.ComponentProps<typeof TemplateManage
       templates={[]}
       selectedTemplateId={null}
       sidebarWidth={360}
+      isListNavCollapsed={false}
+      isListNavPeeking={false}
       isResizingSidebar={false}
       storageError={null}
       onCreateTemplate={vi.fn()}
@@ -118,6 +148,9 @@ function renderManager(props: Partial<React.ComponentProps<typeof TemplateManage
       onResizePointerDown={vi.fn()}
       onResizeKeyDown={vi.fn()}
       onBackToNotes={vi.fn()}
+      onToggleListNav={vi.fn()}
+      onPeekListNav={vi.fn()}
+      onHideListNavPeek={vi.fn()}
       {...props}
     />
   );
