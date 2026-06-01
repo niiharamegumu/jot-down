@@ -22,11 +22,17 @@ describe('NoteList', () => {
       <NoteList
         notes={notes}
         selectedNoteId="note-1"
+        deletionTargetNoteIds={[]}
+        isDeletionTargetSelectionMode={false}
         query=""
         isListNavCollapsed={false}
         onQueryChange={vi.fn()}
         onCreateNote={vi.fn()}
         onSelectNote={vi.fn()}
+        onStartDeletionTargetSelection={vi.fn()}
+        onToggleDeletionTarget={vi.fn()}
+        onDeleteDeletionTargets={vi.fn()}
+        onCancelDeletionTargetSelection={vi.fn()}
         onOpenTemplateManagement={vi.fn()}
         onToggleListNav={vi.fn()}
         onHideListNavPeek={vi.fn()}
@@ -55,11 +61,17 @@ describe('NoteList', () => {
       <NoteList
         notes={notes}
         selectedNoteId={null}
+        deletionTargetNoteIds={[]}
+        isDeletionTargetSelectionMode={false}
         query=""
         isListNavCollapsed={false}
         onQueryChange={onQueryChange}
         onCreateNote={onCreateNote}
         onSelectNote={onSelectNote}
+        onStartDeletionTargetSelection={vi.fn()}
+        onToggleDeletionTarget={vi.fn()}
+        onDeleteDeletionTargets={vi.fn()}
+        onCancelDeletionTargetSelection={vi.fn()}
         onOpenTemplateManagement={onOpenTemplateManagement}
         onToggleListNav={vi.fn()}
         onHideListNavPeek={vi.fn()}
@@ -77,6 +89,74 @@ describe('NoteList', () => {
     expect(onOpenTemplateManagement).toHaveBeenCalledTimes(1);
   });
 
+  it('lets the user mark deletion target notes in the dedicated mode', async () => {
+    const user = userEvent.setup();
+    const onStartDeletionTargetSelection = vi.fn();
+    const onToggleDeletionTarget = vi.fn();
+    const onDeleteDeletionTargets = vi.fn();
+    const onCancelDeletionTargetSelection = vi.fn();
+
+    const { rerender } = render(
+      <NoteList
+        notes={notes}
+        selectedNoteId="note-1"
+        deletionTargetNoteIds={[]}
+        isDeletionTargetSelectionMode={false}
+        query=""
+        isListNavCollapsed={false}
+        onQueryChange={vi.fn()}
+        onCreateNote={vi.fn()}
+        onSelectNote={vi.fn()}
+        onStartDeletionTargetSelection={onStartDeletionTargetSelection}
+        onToggleDeletionTarget={onToggleDeletionTarget}
+        onDeleteDeletionTargets={onDeleteDeletionTargets}
+        onCancelDeletionTargetSelection={onCancelDeletionTargetSelection}
+        onOpenTemplateManagement={vi.fn()}
+        onToggleListNav={vi.fn()}
+        onHideListNavPeek={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: '複数Noteを選択' }));
+
+    expect(onStartDeletionTargetSelection).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <NoteList
+        notes={notes}
+        selectedNoteId="note-1"
+        deletionTargetNoteIds={['note-2']}
+        isDeletionTargetSelectionMode={true}
+        query=""
+        isListNavCollapsed={false}
+        onQueryChange={vi.fn()}
+        onCreateNote={vi.fn()}
+        onSelectNote={vi.fn()}
+        onStartDeletionTargetSelection={onStartDeletionTargetSelection}
+        onToggleDeletionTarget={onToggleDeletionTarget}
+        onDeleteDeletionTargets={onDeleteDeletionTargets}
+        onCancelDeletionTargetSelection={onCancelDeletionTargetSelection}
+        onOpenTemplateManagement={vi.fn()}
+        onToggleListNav={vi.fn()}
+        onHideListNavPeek={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText('1件選択中')).toHaveTextContent('1');
+    expect(screen.getByRole('option', { name: /見出しなし/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+
+    await user.click(screen.getByRole('option', { name: /今日のNote/ }));
+    await user.click(screen.getByRole('button', { name: '選択したNoteを削除' }));
+    await user.click(screen.getByRole('button', { name: '複数選択をキャンセル' }));
+
+    expect(onToggleDeletionTarget).toHaveBeenCalledWith('note-1');
+    expect(onDeleteDeletionTargets).toHaveBeenCalledTimes(1);
+    expect(onCancelDeletionTargetSelection).toHaveBeenCalledTimes(1);
+  });
+
   it('collapses to a list navigation toggle', async () => {
     const user = userEvent.setup();
     const onToggleListNav = vi.fn();
@@ -85,11 +165,17 @@ describe('NoteList', () => {
       <NoteList
         notes={notes}
         selectedNoteId="note-1"
+        deletionTargetNoteIds={[]}
+        isDeletionTargetSelectionMode={false}
         query=""
         isListNavCollapsed={true}
         onQueryChange={vi.fn()}
         onCreateNote={vi.fn()}
         onSelectNote={vi.fn()}
+        onStartDeletionTargetSelection={vi.fn()}
+        onToggleDeletionTarget={vi.fn()}
+        onDeleteDeletionTargets={vi.fn()}
+        onCancelDeletionTargetSelection={vi.fn()}
         onOpenTemplateManagement={vi.fn()}
         onToggleListNav={onToggleListNav}
         onHideListNavPeek={vi.fn()}

@@ -19,6 +19,10 @@ export function createNote(markdown = '', id: string = crypto.randomUUID()): Not
   };
 }
 
+export function duplicateNote(source: Note, id: string = crypto.randomUUID()): Note {
+  return createNote(source.markdown, id);
+}
+
 export function deriveNoteTitle(markdown: string): string {
   const lines = markdown.split(/\r?\n/);
   const heading = lines.map((line) => line.match(headingPattern)?.[1]?.trim()).find(Boolean);
