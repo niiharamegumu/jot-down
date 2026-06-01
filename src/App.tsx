@@ -5,6 +5,7 @@ import { NoteList } from './components/NoteList';
 import { TemplateManager } from './components/TemplateManager';
 import {
   deleteNote,
+  deleteNotes,
   deleteNoteTemplate,
   loadNotes,
   loadNoteTemplates,
@@ -13,6 +14,7 @@ import {
 } from './data/notesDb';
 import {
   createNote,
+  duplicateNote,
   matchesNoteSearch,
   normalizeSupportedMarkdown,
   sortNotesByUpdatedTime,
@@ -43,6 +45,8 @@ export function App() {
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplate[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [deletionTargetNoteIds, setDeletionTargetNoteIds] = useState<string[]>([]);
+  const [isDeletionTargetSelectionMode, setIsDeletionTargetSelectionMode] = useState(false);
   const [activeMarkdown, setActiveMarkdown] = useState('');
   const [activeTemplateName, setActiveTemplateName] = useState('');
   const [activeTemplateMarkdown, setActiveTemplateMarkdown] = useState('');
@@ -126,6 +130,12 @@ export function App() {
 
     return () => window.clearTimeout(timeoutId);
   }, [activeMarkdown, selectedNote]);
+
+  useEffect(() => {
+    setDeletionTargetNoteIds((currentIds) =>
+      currentIds.filter((id) => notes.some((note) => note.id === id))
+    );
+  }, [notes]);
 
   useEffect(() => {
     if (
@@ -338,6 +348,105 @@ export function App() {
     }
   }
 
+  function handleStartDeletionTargetSelection() {
+    setDeletionTargetNoteIds([]);
+    setIsDeletionTargetSelectionMode(true);
+  }
+
+  function handleToggleDeletionTarget(noteId: string) {
+    setDeletionTargetNoteIds((currentIds) =>
+      currentIds.includes(noteId)
+        ? currentIds.filter((currentId) => currentId !== noteId)
+        : [...currentIds, noteId]
+    );
+  }
+
+  function handleCancelDeletionTargetSelection() {
+    setDeletionTargetNoteIds([]);
+    setIsDeletionTargetSelectionMode(false);
+  }
+
+  async function handleDeleteDeletionTargets() {
+    if (deletionTargetNoteIds.length === 0) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `選択した${deletionTargetNoteIds.length}件のNoteは削除され、復元できません。削除しますか？`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    const deletionTargetSet = new Set(deletionTargetNoteIds);
+    const deletesOpenNote = selectedNote ? deletionTargetSet.has(selectedNote.id) : false;
+    const remainingNotes = sortNotesByUpdatedTime(
+      notes.filter((note) => !deletionTargetSet.has(note.id))
+    );
+    const fallbackNote = remainingNotes.length === 0 ? createNote() : null;
+
+    if (!deletesOpenNote) {
+      const saved = await persistActiveNote(activeMarkdown);
+      if (!saved) {
+        return;
+      }
+    }
+
+    try {
+      await deleteNotes(deletionTargetNoteIds);
+
+      if (fallbackNote) {
+        await putNote(fallbackNote);
+      }
+
+      const nextNotes = fallbackNote ? [fallbackNote] : remainingNotes;
+      setNotes((currentNotes) => {
+        const nextCurrentNotes = sortNotesByUpdatedTime(
+          currentNotes.filter((note) => !deletionTargetSet.has(note.id))
+        );
+        return nextCurrentNotes.length > 0 ? nextCurrentNotes : nextNotes;
+      });
+
+      const nextOpenNote = deletesOpenNote ? nextNotes[0] : selectedNote;
+      setSelectedNoteId(nextOpenNote?.id ?? null);
+      setActiveMarkdown(nextOpenNote?.markdown ?? '');
+      setDeletionTargetNoteIds([]);
+      setIsDeletionTargetSelectionMode(false);
+      setMobileView('list');
+      setStorageError(null);
+    } catch (error) {
+      setStorageError(getStorageErrorMessage(error));
+    }
+  }
+
+  async function handleDuplicateNote() {
+    if (!selectedNote) {
+      return;
+    }
+
+    const latestSource: Note = {
+      ...selectedNote,
+      markdown: activeMarkdown
+    };
+    const saved = await persistActiveNote(activeMarkdown);
+    if (!saved) {
+      return;
+    }
+
+    const note = duplicateNote(latestSource);
+    setNotes((currentNotes) => sortNotesByUpdatedTime([note, ...currentNotes]));
+    setSelectedNoteId(note.id);
+    setActiveMarkdown(note.markdown);
+    setMobileView('editor');
+
+    try {
+      await putNote(note);
+      setStorageError(null);
+    } catch (error) {
+      setStorageError(getStorageErrorMessage(error));
+    }
+  }
+
   async function handleDeleteTemplate() {
     if (!selectedTemplate) {
       return;
@@ -464,11 +573,17 @@ export function App() {
       <NoteList
         notes={visibleNotes}
         selectedNoteId={selectedNoteId}
+        deletionTargetNoteIds={deletionTargetNoteIds}
+        isDeletionTargetSelectionMode={isDeletionTargetSelectionMode}
         query={query}
         isListNavCollapsed={isListNavCollapsed}
         onQueryChange={handleQueryChange}
         onCreateNote={handleCreateNote}
         onSelectNote={handleSelectNote}
+        onStartDeletionTargetSelection={handleStartDeletionTargetSelection}
+        onToggleDeletionTarget={handleToggleDeletionTarget}
+        onDeleteDeletionTargets={handleDeleteDeletionTargets}
+        onCancelDeletionTargetSelection={handleCancelDeletionTargetSelection}
         onOpenTemplateManagement={() => setAppView('templates')}
         onToggleListNav={toggleListNav}
         onHideListNavPeek={() => setIsListNavPeeking(false)}
@@ -507,6 +622,7 @@ export function App() {
         onMarkdownChange={handleMarkdownChange}
         onFlush={() => void persistActiveNote(activeMarkdown)}
         onApplyAppUpdate={handleApplyAppUpdate}
+        onDuplicateNote={handleDuplicateNote}
         onDeleteNote={handleDeleteNote}
         onOpenTemplateManagement={() => setAppView('templates')}
         onBackToList={() => setMobileView('list')}

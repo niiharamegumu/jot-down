@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveNoteSnippet,
   deriveNoteTitle,
+  duplicateNote,
   matchesNoteSearch,
   normalizeSupportedMarkdown,
   sortNotesByUpdatedTime,
@@ -54,6 +55,22 @@ describe('Note order', () => {
 
     expect(sortNotesByUpdatedTime(notes).map((item) => item.id)).toEqual(['new', 'old']);
     expect(notes.map((item) => item.id)).toEqual(['old', 'new']);
+  });
+});
+
+describe('Note duplication', () => {
+  it('creates a separate note with the same Markdown text', () => {
+    const source = note('source', '# 買い物\n- [ ] 牛乳', '2026-05-01T00:00:00.000Z');
+
+    const duplicated = duplicateNote(source, 'duplicate');
+
+    expect(duplicated).toEqual(
+      expect.objectContaining({
+        id: 'duplicate',
+        markdown: source.markdown
+      })
+    );
+    expect(duplicated.updatedAt).not.toBe(source.updatedAt);
   });
 });
 

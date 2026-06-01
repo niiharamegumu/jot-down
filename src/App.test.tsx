@@ -2,7 +2,13 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { App } from './App';
-import { loadNotes, loadNoteTemplates, putNote, putNoteTemplate } from './data/notesDb';
+import {
+  deleteNotes,
+  loadNotes,
+  loadNoteTemplates,
+  putNote,
+  putNoteTemplate
+} from './data/notesDb';
 
 vi.mock('virtual:pwa-register/react', () => ({
   useRegisterSW: ({ onRegisteredSW }: { onRegisteredSW: (url: string) => void }) => {
@@ -52,6 +58,7 @@ vi.mock('./data/notesDb', () => ({
   loadNoteTemplates: vi.fn(),
   putNote: vi.fn(),
   deleteNote: vi.fn(),
+  deleteNotes: vi.fn(),
   putNoteTemplate: vi.fn(),
   deleteNoteTemplate: vi.fn()
 }));
@@ -59,6 +66,7 @@ vi.mock('./data/notesDb', () => ({
 const loadNotesMock = vi.mocked(loadNotes);
 const loadNoteTemplatesMock = vi.mocked(loadNoteTemplates);
 const putNoteMock = vi.mocked(putNote);
+const deleteNotesMock = vi.mocked(deleteNotes);
 const putNoteTemplateMock = vi.mocked(putNoteTemplate);
 
 describe('App', () => {
@@ -136,6 +144,84 @@ describe('App', () => {
 
     expect(await screen.findByRole('option', { name: /会議/ })).toBeInTheDocument();
     expect(putNoteMock).toHaveBeenCalledWith(expect.objectContaining({ markdown: '# 会議' }));
+  });
+
+  it('duplicates the selected note using the latest visible Markdown', async () => {
+    const user = userEvent.setup();
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'note',
+        markdown: '# 既存',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      }
+    ]);
+    loadNoteTemplatesMock.mockResolvedValue([]);
+    putNoteMock.mockResolvedValue();
+
+    render(<App />);
+
+    await screen.findByRole('option', { name: /既存/ });
+    await user.type(screen.getByLabelText('Markdown editor'), '\n追加');
+    await user.click(screen.getByRole('button', { name: 'Noteを複製' }));
+
+    expect(await screen.findAllByRole('option', { name: /既存/ })).toHaveLength(2);
+    expect(putNoteMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        markdown: '# 既存\n追加'
+      })
+    );
+    expect(putNoteMock).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({
+        id: 'note'
+      })
+    );
+  });
+
+  it('deletes multiple deletion target notes from the note list', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'shopping',
+        markdown: '# 買い物',
+        updatedAt: '2026-05-27T03:15:00.000Z'
+      },
+      {
+        id: 'ideas',
+        markdown: '# アイデア',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      },
+      {
+        id: 'log',
+        markdown: '# ログ',
+        updatedAt: '2026-05-25T03:15:00.000Z'
+      }
+    ]);
+    loadNoteTemplatesMock.mockResolvedValue([]);
+    putNoteMock.mockResolvedValue();
+    deleteNotesMock.mockResolvedValue();
+
+    render(<App />);
+
+    await screen.findByRole('option', { name: /買い物/ });
+    await user.click(screen.getByRole('button', { name: '複数Noteを選択' }));
+    await user.click(screen.getByRole('option', { name: /買い物/ }));
+    await user.click(screen.getByRole('option', { name: /アイデア/ }));
+
+    expect(screen.getByLabelText('2件選択中')).toHaveTextContent('2');
+
+    await user.click(screen.getByRole('button', { name: '選択したNoteを削除' }));
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      '選択した2件のNoteは削除され、復元できません。削除しますか？'
+    );
+    expect(deleteNotesMock).toHaveBeenCalledWith(['shopping', 'ideas']);
+    expect(screen.queryByRole('option', { name: /買い物/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /アイデア/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /ログ/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByLabelText('2件選択中')).not.toBeInTheDocument();
+
+    confirmSpy.mockRestore();
   });
 
   it('keeps list navigation collapsed across note and template views', async () => {

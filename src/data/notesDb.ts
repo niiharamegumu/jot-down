@@ -33,6 +33,12 @@ export async function deleteNote(id: string): Promise<void> {
   await db.notes.delete(id);
 }
 
+export async function deleteNotes(ids: string[]): Promise<void> {
+  await db.transaction('rw', db.notes, async () => {
+    await db.notes.bulkDelete(ids);
+  });
+}
+
 export async function loadNoteTemplates(): Promise<NoteTemplate[]> {
   await db.open();
   return db.noteTemplates.orderBy('name').toArray();

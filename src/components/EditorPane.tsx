@@ -37,6 +37,7 @@ type EditorPaneProps = {
   onMarkdownChange: (markdown: string) => void;
   onFlush: () => void;
   onApplyAppUpdate: () => void;
+  onDuplicateNote: () => void;
   onDeleteNote: () => void;
   onOpenTemplateManagement: () => void;
   onBackToList: () => void;
@@ -69,6 +70,7 @@ export function EditorPane({
   onMarkdownChange,
   onFlush,
   onApplyAppUpdate,
+  onDuplicateNote,
   onDeleteNote,
   onOpenTemplateManagement,
   onBackToList
@@ -125,6 +127,18 @@ export function EditorPane({
         <p className="editor-toolbar__updated-at">
           {updatedAt ? updatedAtFormatter.format(new Date(updatedAt)) : ''}
         </p>
+        <button
+          className="icon-button duplicate-button"
+          type="button"
+          onClick={onDuplicateNote}
+          aria-label="Noteを複製"
+          data-tooltip="Noteを複製"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M8 8h10v12H8z" />
+            <path d="M6 16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+        </button>
         <div className="template-insert">
           <button
             className="icon-button"

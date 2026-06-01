@@ -32,6 +32,14 @@ _Avoid_: Document, page, list
 A confirmed action that removes a note from the local note store without creating a separate recoverable place for it. Empty notes remain until explicitly deleted, deletion confirmation must make the lack of recovery clear, and deleting the active note should leave another note ready for writing.
 _Avoid_: Trash, archive
 
+**Deletion target note**:
+A note that the user has marked for a future deletion action without necessarily opening it for editing. Deletion target selection is separate from the currently open note, and marking a note as a deletion target does not change note content or note order.
+_Avoid_: Selected note, active note, checked task, queued deletion
+
+**Note duplication**:
+An action that creates a separate note with the same Markdown text as an existing note. The duplicate is a normal note immediately after creation and does not retain a relationship to the original note.
+_Avoid_: Clone link, version, fork, copy marker
+
 **Note title**:
 The display name of a note, derived from the first heading of any level in the note's Markdown text, or from the first non-empty line when no heading exists. A note with no usable non-whitespace text is shown as untitled without storing that as note content.
 _Avoid_: Separate title field, filename
@@ -111,6 +119,18 @@ Domain expert: "No. The user is writing notes; document and page are implementat
 
 Developer: "Where does a note title come from?"
 Domain expert: "From the note text. If the user wants to rename a note, they edit the note content."
+
+Developer: "When a note is duplicated, should the app add '(copy)' to the heading?"
+Domain expert: "No. Note duplication creates another note with the same Markdown text. Changing the heading would change the duplicated note content."
+
+Developer: "Does a duplicated note remember the original note?"
+Domain expert: "No. The duplicate is a normal note immediately after creation."
+
+Developer: "When the user marks several notes in the list for deletion, are those the selected notes?"
+Domain expert: "Call them deletion target notes. The selected or open note is the one being edited, while deletion target notes are only marked for a future deletion action."
+
+Developer: "Does marking a note as a deletion target open it or move it in note order?"
+Domain expert: "No. It only marks the note for deletion and leaves editing and ordering unchanged."
 
 Developer: "Should reusable meeting notes appear in the note list until someone uses them?"
 Domain expert: "No. That is a note template, not a note. It becomes note content only when applied."

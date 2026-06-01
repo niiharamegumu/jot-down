@@ -4,11 +4,17 @@ import { deriveNoteSnippet, deriveNoteTitle } from '../domain/note';
 type NoteListProps = {
   notes: Note[];
   selectedNoteId: string | null;
+  deletionTargetNoteIds: string[];
+  isDeletionTargetSelectionMode: boolean;
   query: string;
   isListNavCollapsed: boolean;
   onQueryChange: (query: string) => void;
   onCreateNote: () => void;
   onSelectNote: (noteId: string) => void;
+  onStartDeletionTargetSelection: () => void;
+  onToggleDeletionTarget: (noteId: string) => void;
+  onDeleteDeletionTargets: () => void;
+  onCancelDeletionTargetSelection: () => void;
   onOpenTemplateManagement: () => void;
   onToggleListNav: () => void;
   onHideListNavPeek: () => void;
@@ -24,15 +30,23 @@ const dateFormatter = new Intl.DateTimeFormat('ja-JP', {
 export function NoteList({
   notes,
   selectedNoteId,
+  deletionTargetNoteIds,
+  isDeletionTargetSelectionMode,
   query,
   isListNavCollapsed,
   onQueryChange,
   onCreateNote,
   onSelectNote,
+  onStartDeletionTargetSelection,
+  onToggleDeletionTarget,
+  onDeleteDeletionTargets,
+  onCancelDeletionTargetSelection,
   onOpenTemplateManagement,
   onToggleListNav,
   onHideListNavPeek
 }: NoteListProps) {
+  const deletionTargetCount = deletionTargetNoteIds.length;
+
   return (
     <aside
       className={`note-list${isListNavCollapsed ? ' note-list--collapsed' : ''}`}
@@ -40,18 +54,73 @@ export function NoteList({
       onMouseLeave={onHideListNavPeek}
     >
       <div className="note-list__header">
-        <button
-          className="icon-button"
-          type="button"
-          onClick={onCreateNote}
-          aria-label="新しいNoteを作成"
-          data-tooltip="新しいNoteを作成"
-        >
-          <svg aria-hidden="true" viewBox="0 0 24 24">
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-        </button>
+        {isDeletionTargetSelectionMode ? (
+          <div className="note-list__selection-actions">
+            <span
+              className="note-list__selection-count"
+              aria-label={`${deletionTargetCount}件選択中`}
+            >
+              {deletionTargetCount}
+            </span>
+            <button
+              className="delete-button"
+              type="button"
+              onClick={onDeleteDeletionTargets}
+              disabled={deletionTargetCount === 0}
+              aria-label="選択したNoteを削除"
+              data-tooltip="選択したNoteを削除"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M3 6h18" />
+                <path d="M8 6V4h8v2" />
+                <path d="M6 6l1 15h10l1-15" />
+                <path d="M10 10v7" />
+                <path d="M14 10v7" />
+              </svg>
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={onCancelDeletionTargetSelection}
+              aria-label="複数選択をキャンセル"
+              data-tooltip="複数選択をキャンセル"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M18 6L6 18" />
+                <path d="M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={onStartDeletionTargetSelection}
+              aria-label="複数Noteを選択"
+              data-tooltip="複数Noteを選択"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M4 6h4v4H4z" />
+                <path d="M11 8h9" />
+                <path d="M4 14h4v4H4z" />
+                <path d="M11 16h9" />
+              </svg>
+            </button>
+            <button
+              className="icon-button"
+              type="button"
+              onClick={onCreateNote}
+              aria-label="新しいNoteを作成"
+              data-tooltip="新しいNoteを作成"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+            </button>
+          </>
+        )}
       </div>
 
       <label className="search">
@@ -64,21 +133,42 @@ export function NoteList({
         />
       </label>
 
-      <div className="note-list__items" role="listbox" aria-label="Note一覧">
+      <div
+        className="note-list__items"
+        role="listbox"
+        aria-label="Note一覧"
+        aria-multiselectable={isDeletionTargetSelectionMode || undefined}
+      >
         {notes.map((note) => {
-          const selected = note.id === selectedNoteId;
+          const isDeletionTarget = deletionTargetNoteIds.includes(note.id);
+          const selected = isDeletionTargetSelectionMode
+            ? isDeletionTarget
+            : note.id === selectedNoteId;
           const title = deriveNoteTitle(note.markdown);
           const snippet = deriveNoteSnippet(note.markdown);
 
           return (
             <button
               key={note.id}
-              className="note-card"
+              className={`note-card${isDeletionTargetSelectionMode ? ' note-card--targetable' : ''}${note.id === selectedNoteId ? ' note-card--open' : ''}`}
               type="button"
               role="option"
               aria-selected={selected}
-              onClick={() => onSelectNote(note.id)}
+              onClick={() =>
+                isDeletionTargetSelectionMode
+                  ? onToggleDeletionTarget(note.id)
+                  : onSelectNote(note.id)
+              }
             >
+              {isDeletionTargetSelectionMode ? (
+                <span className="note-card__target-check" aria-hidden="true">
+                  {isDeletionTarget ? (
+                    <svg viewBox="0 0 24 24">
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                  ) : null}
+                </span>
+              ) : null}
               <span className="note-card__title">{title}</span>
               <span className="note-card__meta">
                 {dateFormatter.format(new Date(note.updatedAt))}

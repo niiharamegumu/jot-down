@@ -85,6 +85,7 @@ describe('EditorPane', () => {
         onMarkdownChange={vi.fn()}
         onFlush={vi.fn()}
         onApplyAppUpdate={vi.fn()}
+        onDuplicateNote={vi.fn()}
         onDeleteNote={vi.fn()}
         onOpenTemplateManagement={vi.fn()}
         onBackToList={vi.fn()}
@@ -275,6 +276,7 @@ describe('EditorPane', () => {
         onMarkdownChange={vi.fn()}
         onFlush={vi.fn()}
         onApplyAppUpdate={vi.fn()}
+        onDuplicateNote={vi.fn()}
         onDeleteNote={vi.fn()}
         onOpenTemplateManagement={vi.fn()}
         onBackToList={vi.fn()}
@@ -360,6 +362,16 @@ describe('EditorPane', () => {
     expect(onDeleteNote).toHaveBeenCalledTimes(1);
   });
 
+  it('requests note duplication through the duplicate action', async () => {
+    const user = userEvent.setup();
+    const onDuplicateNote = vi.fn();
+    renderEditor({ onDuplicateNote });
+
+    await user.click(screen.getByRole('button', { name: 'Noteを複製' }));
+
+    expect(onDuplicateNote).toHaveBeenCalledTimes(1);
+  });
+
   it('inserts a selected template into the note Markdown', async () => {
     const user = userEvent.setup();
     const onMarkdownChange = vi.fn();
@@ -401,6 +413,7 @@ function renderEditor(
       onMarkdownChange={vi.fn()}
       onFlush={vi.fn()}
       onApplyAppUpdate={vi.fn()}
+      onDuplicateNote={vi.fn()}
       onDeleteNote={vi.fn()}
       onOpenTemplateManagement={vi.fn()}
       onBackToList={vi.fn()}
