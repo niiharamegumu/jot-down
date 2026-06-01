@@ -40,6 +40,10 @@ _Avoid_: Selected note, active note, checked task, queued deletion
 An action that creates a separate note with the same Markdown text as an existing note. The duplicate is a normal note immediately after creation and does not retain a relationship to the original note.
 _Avoid_: Clone link, version, fork, copy marker
 
+**Note Markdown copy**:
+An action that places the currently open note's Markdown text on the system clipboard without creating, changing, or saving a note. The copied text is the note text itself, including any unsaved visible edits.
+_Avoid_: Note duplication, export, share, rendered copy
+
 **Note title**:
 The display name of a note, derived from the first heading of any level in the note's Markdown text, or from the first non-empty line when no heading exists. A note with no usable non-whitespace text is shown as untitled without storing that as note content.
 _Avoid_: Separate title field, filename
@@ -125,6 +129,9 @@ Domain expert: "No. Note duplication creates another note with the same Markdown
 
 Developer: "Does a duplicated note remember the original note?"
 Domain expert: "No. The duplicate is a normal note immediately after creation."
+
+Developer: "When a user copies a Note, does that create another Note?"
+Domain expert: "No. Note Markdown copy only places the open Note's Markdown text on the clipboard."
 
 Developer: "When the user marks several notes in the list for deletion, are those the selected notes?"
 Domain expert: "Call them deletion target notes. The selected or open note is the one being edited, while deletion target notes are only marked for a future deletion action."

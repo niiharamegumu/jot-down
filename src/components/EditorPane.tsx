@@ -12,6 +12,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ClipboardEvent,
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent
 } from 'react';
@@ -80,10 +81,20 @@ export function EditorPane({
   const previousNoteIdRef = useRef<string | null>(null);
   const currentNoteIdRef = useRef<string | null>(null);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   useLayoutEffect(() => {
     currentNoteIdRef.current = note?.id ?? null;
   }, [note?.id]);
+
+  useEffect(() => {
+    if (copyStatus === 'idle') {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setCopyStatus('idle'), 2200);
+    return () => window.clearTimeout(timeoutId);
+  }, [copyStatus]);
 
   useEffect(() => {
     if (!note) {
@@ -127,6 +138,21 @@ export function EditorPane({
         <p className="editor-toolbar__updated-at">
           {updatedAt ? updatedAtFormatter.format(new Date(updatedAt)) : ''}
         </p>
+        <button
+          className="icon-button copy-markdown-button"
+          type="button"
+          onClick={handleCopyMarkdown}
+          aria-label="Note Markdownをコピー"
+          data-tooltip="Note Markdownをコピー"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M9 5h6" />
+            <path d="M10 3h4a1 1 0 0 1 1 1v2H9V4a1 1 0 0 1 1-1z" />
+            <path d="M7 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1" />
+            <path d="M8 12h8" />
+            <path d="M8 16h6" />
+          </svg>
+        </button>
         <button
           className="icon-button duplicate-button"
           type="button"
@@ -198,6 +224,11 @@ export function EditorPane({
         </div>
       ) : null}
 
+      <p className="copy-status" role="status" aria-live="polite">
+        {copyStatus === 'copied' ? 'コピーしました' : ''}
+        {copyStatus === 'failed' ? 'コピーできませんでした' : ''}
+      </p>
+
       {appUpdateAvailable ? (
         <div className="app-update" role="status">
           <span>新しいバージョンがあります。</span>
@@ -225,6 +256,56 @@ export function EditorPane({
       </section>
     </main>
   );
+
+  async function handleCopyMarkdown() {
+    const copied = await copyTextToClipboard(markdown);
+    setCopyStatus(copied ? 'copied' : 'failed');
+  }
+
+  async function copyTextToClipboard(text: string): Promise<boolean> {
+    if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        return copyTextUsingSelection(text);
+      }
+    }
+
+    return copyTextUsingSelection(text);
+  }
+
+  function copyTextUsingSelection(text: string): boolean {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '0';
+    textarea.style.left = '-9999px';
+    textarea.style.opacity = '0';
+
+    const selection = document.getSelection();
+    const previousRange =
+      selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
+
+    document.body.append(textarea);
+    textarea.select();
+
+    try {
+      const copied = document.execCommand('copy');
+      return copied;
+    } catch {
+      return false;
+    } finally {
+      textarea.remove();
+      if (selection) {
+        selection.removeAllRanges();
+        if (previousRange) {
+          selection.addRange(previousRange);
+        }
+      }
+    }
+  }
 
   function handleTaskClick(event: ReactMouseEvent<HTMLElement>) {
     const target = event.target instanceof HTMLElement ? event.target : null;
@@ -313,7 +394,26 @@ export function EditorPane({
     onFlush();
   }
 
-  function handleEditorPaste() {
+  function handleEditorPaste(event: ClipboardEvent<HTMLElement>) {
+    const pastedText = event.clipboardData.getData('text/plain');
+    if (pastedText) {
+      event.preventDefault();
+      event.stopPropagation();
+      const normalizedPastedText = normalizeSupportedMarkdown(pastedText);
+
+      if (markdown.trim() === '') {
+        editorRef.current?.setMarkdown(normalizedPastedText);
+        onMarkdownChange(normalizedPastedText);
+        return;
+      }
+
+      editorRef.current?.focus(() => {
+        editorRef.current?.insertMarkdown(normalizedPastedText);
+        onMarkdownChange(normalizeSupportedMarkdown(editorRef.current?.getMarkdown() ?? markdown));
+      });
+      return;
+    }
+
     window.requestAnimationFrame(syncNormalizedEditorMarkdown);
   }
 

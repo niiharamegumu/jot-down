@@ -177,6 +177,34 @@ describe('App', () => {
     );
   });
 
+  it('copies the selected note using the latest visible Markdown', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const restoreClipboard = mockClipboard(writeText);
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'note',
+        markdown: '# 既存',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      }
+    ]);
+    loadNoteTemplatesMock.mockResolvedValue([]);
+    putNoteMock.mockResolvedValue();
+
+    try {
+      render(<App />);
+
+      await screen.findByRole('option', { name: /既存/ });
+      await user.type(screen.getByLabelText('Markdown editor'), '\n追加');
+      await user.click(screen.getByRole('button', { name: 'Note Markdownをコピー' }));
+
+      expect(writeText).toHaveBeenCalledWith('# 既存\n追加');
+      expect(await screen.findByText('コピーしました')).toBeInTheDocument();
+    } finally {
+      restoreClipboard();
+    }
+  });
+
   it('deletes multiple deletion target notes from the note list', async () => {
     const user = userEvent.setup();
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
@@ -265,3 +293,19 @@ describe('App', () => {
     expect(window.localStorage.getItem('jot-down-list-nav-collapsed')).toBe('true');
   });
 });
+
+function mockClipboard(writeText: (value: string) => Promise<void>) {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText }
+  });
+
+  return () => {
+    if (originalDescriptor) {
+      Object.defineProperty(navigator, 'clipboard', originalDescriptor);
+    } else {
+      Reflect.deleteProperty(navigator, 'clipboard');
+    }
+  };
+}
