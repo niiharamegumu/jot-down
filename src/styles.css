@@ -353,6 +353,12 @@ h2 {
   transform: none;
 }
 
+.editor-toolbar .back-button[data-tooltip]::after,
+.template-editor__toolbar .back-button[data-tooltip]::after {
+  left: 0;
+  transform: none;
+}
+
 .icon-button[data-tooltip]:hover::after,
 .delete-button[data-tooltip]:hover::after,
 .back-button[data-tooltip]:hover::after,
@@ -1000,10 +1006,17 @@ h2 {
   }
 
   .note-list--collapsed {
-    position: fixed;
-    height: 100vh;
+    position: static;
+    width: auto;
+    max-width: none;
+    height: auto;
     min-height: 100vh;
-    overflow: hidden;
+    margin: 0;
+    border-radius: 0;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+    overflow: visible;
   }
 
   .editor-pane {
@@ -1014,16 +1027,17 @@ h2 {
     display: none;
   }
 
-  .app-shell--list.app-shell--list-nav-collapsed .editor-pane {
-    display: flex;
-  }
-
   .app-shell--editor .note-list {
     display: none;
   }
 
   .back-button {
     display: inline-grid;
+  }
+
+  .note-list__footer,
+  .template-sidebar__footer {
+    justify-content: flex-end;
   }
 
   h2 {
@@ -1051,16 +1065,23 @@ h2 {
   .template-editor {
     position: static;
     height: auto;
-    min-height: auto;
+    min-height: 100vh;
     margin: 0;
     border-radius: 0;
   }
 
   .template-sidebar--collapsed {
-    position: fixed;
-    height: 100vh;
+    position: static;
+    width: auto;
+    max-width: none;
+    height: auto;
     min-height: 100vh;
-    overflow: hidden;
+    margin: 0;
+    border-radius: 0;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+    overflow: visible;
   }
 
   .template-sidebar {
@@ -1069,10 +1090,6 @@ h2 {
   }
 
   .template-list {
-    max-height: 36vh;
-  }
-
-  .template-editor {
-    min-height: 64vh;
+    max-height: none;
   }
 }

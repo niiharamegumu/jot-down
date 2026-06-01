@@ -37,6 +37,7 @@ const starterMarkdown = `# 今日やること
 const starterNoteId = 'starter-note';
 const sidebarWidthStorageKey = 'jot-down-sidebar-width';
 const listNavCollapsedStorageKey = 'jot-down-list-nav-collapsed';
+const smallScreenMediaQuery = '(max-width: 760px)';
 const minSidebarWidth = 260;
 const maxSidebarWidth = 520;
 
@@ -55,7 +56,9 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(() => loadSidebarWidth());
   const [isListNavCollapsed, setIsListNavCollapsed] = useState(() => loadListNavCollapsed());
   const [isListNavPeeking, setIsListNavPeeking] = useState(false);
+  const [isSmallScreen, setIsSmallScreen] = useState(() => matchesSmallScreen());
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('list');
+  const [templateMobileView, setTemplateMobileView] = useState<'list' | 'editor'>('list');
   const [appView, setAppView] = useState<'notes' | 'templates'>('notes');
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [isInstalledPwa, setIsInstalledPwa] = useState(() => isRunningAsInstalledPwa());
@@ -79,6 +82,8 @@ export function App() {
     matchesNoteSearch(note, query)
   );
   const applicableTemplates = getApplicableNoteTemplates(noteTemplates);
+  const effectiveListNavCollapsed = isListNavCollapsed && !isSmallScreen;
+  const canToggleListNav = !isSmallScreen;
 
   useEffect(() => {
     let cancelled = false;
@@ -171,6 +176,20 @@ export function App() {
     function handleOnline() {
       void serviceWorkerRegistrationRef.current?.update();
     }
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(smallScreenMediaQuery);
+
+    function updateSmallScreenState() {
+      setIsSmallScreen(mediaQuery.matches);
+      setIsListNavPeeking(false);
+    }
+
+    updateSmallScreenState();
+    mediaQuery.addEventListener('change', updateSmallScreenState);
+
+    return () => mediaQuery.removeEventListener('change', updateSmallScreenState);
   }, []);
 
   function updateNotes(nextNote: Note) {
@@ -284,6 +303,7 @@ export function App() {
     setSelectedTemplateId(template.id);
     setActiveTemplateName(template.name);
     setActiveTemplateMarkdown(template.markdown);
+    setTemplateMobileView('editor');
 
     try {
       await putNoteTemplate(template);
@@ -315,6 +335,7 @@ export function App() {
     setSelectedTemplateId(nextTemplate.id);
     setActiveTemplateName(nextTemplate.name);
     setActiveTemplateMarkdown(nextTemplate.markdown);
+    setTemplateMobileView('editor');
   }
 
   async function handleDeleteNote() {
@@ -466,6 +487,7 @@ export function App() {
       setSelectedTemplateId(remainingTemplates[0]?.id ?? null);
       setActiveTemplateName(remainingTemplates[0]?.name ?? '');
       setActiveTemplateMarkdown(remainingTemplates[0]?.markdown ?? '');
+      setTemplateMobileView('list');
       setStorageError(null);
     } catch (error) {
       setStorageError(getStorageErrorMessage(error));
@@ -521,6 +543,11 @@ export function App() {
     }
   }
 
+  function openTemplateManagement() {
+    setTemplateMobileView('list');
+    setAppView('templates');
+  }
+
   if (appView === 'templates') {
     return (
       <TemplateManager
@@ -530,8 +557,11 @@ export function App() {
             : template
         )}
         selectedTemplateId={selectedTemplateId}
+        mobileView={templateMobileView}
         sidebarWidth={sidebarWidth}
-        isListNavCollapsed={isListNavCollapsed}
+        isSmallScreen={isSmallScreen}
+        canToggleListNav={canToggleListNav}
+        isListNavCollapsed={effectiveListNavCollapsed}
         isListNavPeeking={isListNavPeeking}
         isResizingSidebar={isResizingSidebar}
         storageError={storageError}
@@ -549,6 +579,11 @@ export function App() {
         onBackToNotes={() => {
           void persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
           setAppView('notes');
+          setMobileView('list');
+        }}
+        onBackToTemplateList={() => {
+          void persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
+          setTemplateMobileView('list');
         }}
         onToggleListNav={toggleListNav}
         onPeekListNav={() => setIsListNavPeeking(true)}
@@ -560,10 +595,10 @@ export function App() {
   return (
     <div
       ref={shellRef}
-      className={`app-shell app-shell--${mobileView}${isListNavCollapsed ? ' app-shell--list-nav-collapsed' : ''}${isListNavPeeking ? ' app-shell--list-nav-peeking' : ''}${isResizingSidebar ? ' app-shell--resizing' : ''}`}
+      className={`app-shell app-shell--${mobileView}${effectiveListNavCollapsed ? ' app-shell--list-nav-collapsed' : ''}${isListNavPeeking ? ' app-shell--list-nav-peeking' : ''}${isResizingSidebar ? ' app-shell--resizing' : ''}`}
       style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
     >
-      {isListNavCollapsed ? (
+      {canToggleListNav && effectiveListNavCollapsed ? (
         <div
           className="list-nav-peek-zone"
           aria-hidden="true"
@@ -576,7 +611,8 @@ export function App() {
         deletionTargetNoteIds={deletionTargetNoteIds}
         isDeletionTargetSelectionMode={isDeletionTargetSelectionMode}
         query={query}
-        isListNavCollapsed={isListNavCollapsed}
+        canToggleListNav={canToggleListNav}
+        isListNavCollapsed={effectiveListNavCollapsed}
         onQueryChange={handleQueryChange}
         onCreateNote={handleCreateNote}
         onSelectNote={handleSelectNote}
@@ -584,11 +620,11 @@ export function App() {
         onToggleDeletionTarget={handleToggleDeletionTarget}
         onDeleteDeletionTargets={handleDeleteDeletionTargets}
         onCancelDeletionTargetSelection={handleCancelDeletionTargetSelection}
-        onOpenTemplateManagement={() => setAppView('templates')}
+        onOpenTemplateManagement={openTemplateManagement}
         onToggleListNav={toggleListNav}
         onHideListNavPeek={() => setIsListNavPeeking(false)}
       />
-      {!isListNavCollapsed ? (
+      {canToggleListNav && !effectiveListNavCollapsed ? (
         <div
           className="pane-resizer"
           role="separator"
@@ -624,7 +660,7 @@ export function App() {
         onApplyAppUpdate={handleApplyAppUpdate}
         onDuplicateNote={handleDuplicateNote}
         onDeleteNote={handleDeleteNote}
-        onOpenTemplateManagement={() => setAppView('templates')}
+        onOpenTemplateManagement={openTemplateManagement}
         onBackToList={() => setMobileView('list')}
       />
     </div>
@@ -709,6 +745,10 @@ export function App() {
   }
 
   function toggleListNav() {
+    if (isSmallScreen) {
+      return;
+    }
+
     setIsListNavCollapsed((currentValue) => {
       const nextValue = !currentValue;
       window.localStorage.setItem(listNavCollapsedStorageKey, String(nextValue));
@@ -737,6 +777,10 @@ function loadSidebarWidth(): number {
 
 function loadListNavCollapsed(): boolean {
   return window.localStorage.getItem(listNavCollapsedStorageKey) === 'true';
+}
+
+function matchesSmallScreen(): boolean {
+  return window.matchMedia(smallScreenMediaQuery).matches;
 }
 
 function isRunningAsInstalledPwa(): boolean {

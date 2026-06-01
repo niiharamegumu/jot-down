@@ -20,7 +20,10 @@ import { mdxEditorSelectionPlugin } from './mdxEditorSelectionPlugin';
 type TemplateManagerProps = {
   templates: NoteTemplate[];
   selectedTemplateId: string | null;
+  mobileView: 'list' | 'editor';
   sidebarWidth: number;
+  isSmallScreen: boolean;
+  canToggleListNav: boolean;
   isListNavCollapsed: boolean;
   isListNavPeeking: boolean;
   isResizingSidebar: boolean;
@@ -35,6 +38,7 @@ type TemplateManagerProps = {
   onResizePointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   onResizeKeyDown: (direction: 'narrower' | 'wider') => void;
   onBackToNotes: () => void;
+  onBackToTemplateList: () => void;
   onToggleListNav: () => void;
   onPeekListNav: () => void;
   onHideListNavPeek: () => void;
@@ -52,7 +56,10 @@ const editorPlugins = [
 export function TemplateManager({
   templates,
   selectedTemplateId,
+  mobileView,
   sidebarWidth,
+  isSmallScreen,
+  canToggleListNav,
   isListNavCollapsed,
   isListNavPeeking,
   isResizingSidebar,
@@ -67,6 +74,7 @@ export function TemplateManager({
   onResizePointerDown,
   onResizeKeyDown,
   onBackToNotes,
+  onBackToTemplateList,
   onToggleListNav,
   onPeekListNav,
   onHideListNavPeek
@@ -79,6 +87,8 @@ export function TemplateManager({
   const selectedCompletion = selectedTemplate
     ? getNoteTemplateCompletion(selectedTemplate, templates)
     : null;
+  const showTemplateList = !isSmallScreen || mobileView === 'list';
+  const showTemplateEditor = !isSmallScreen || mobileView === 'editor';
 
   useEffect(() => {
     if (!selectedTemplate) {
@@ -97,93 +107,99 @@ export function TemplateManager({
 
   return (
     <main
-      className={`template-manager${isListNavCollapsed ? ' template-manager--list-nav-collapsed' : ''}${isListNavPeeking ? ' template-manager--list-nav-peeking' : ''}${isResizingSidebar ? ' template-manager--resizing' : ''}`}
+      className={`template-manager template-manager--${mobileView}${isListNavCollapsed ? ' template-manager--list-nav-collapsed' : ''}${isListNavPeeking ? ' template-manager--list-nav-peeking' : ''}${isResizingSidebar ? ' template-manager--resizing' : ''}`}
       aria-label="テンプレート管理"
       style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}
     >
-      {isListNavCollapsed ? (
+      {canToggleListNav && isListNavCollapsed ? (
         <div className="list-nav-peek-zone" aria-hidden="true" onMouseEnter={onPeekListNav} />
       ) : null}
-      <aside
-        className={`template-sidebar${isListNavCollapsed ? ' template-sidebar--collapsed' : ''}`}
-        aria-label="テンプレート一覧"
-        onMouseLeave={onHideListNavPeek}
-      >
-        <div className="template-sidebar__header">
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onCreateTemplate}
-            aria-label="新しいテンプレートを作成"
-            data-tooltip="新しいテンプレートを作成"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
-          </button>
-        </div>
+      {showTemplateList ? (
+        <aside
+          className={`template-sidebar${isListNavCollapsed ? ' template-sidebar--collapsed' : ''}`}
+          aria-label="テンプレート一覧"
+          onMouseLeave={onHideListNavPeek}
+        >
+          <div className="template-sidebar__header">
+            <button
+              className="icon-button"
+              type="button"
+              onClick={onCreateTemplate}
+              aria-label="新しいテンプレートを作成"
+              data-tooltip="新しいテンプレートを作成"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+            </button>
+          </div>
 
-        <div className="template-list" role="listbox" aria-label="テンプレート一覧">
-          {sortedTemplates.map((template) => {
-            const selected = template.id === selectedTemplateId;
-            const completion = getNoteTemplateCompletion(template, templates);
-            const visibleStatus = getVisibleTemplateStatus(template, completion.reason);
-            const displayName = template.name.trim() || '名称未設定';
+          <div className="template-list" role="listbox" aria-label="テンプレート一覧">
+            {sortedTemplates.map((template) => {
+              const selected = template.id === selectedTemplateId;
+              const completion = getNoteTemplateCompletion(template, templates);
+              const visibleStatus = getVisibleTemplateStatus(template, completion.reason);
+              const displayName = template.name.trim() || '名称未設定';
 
-            return (
+              return (
+                <button
+                  key={template.id}
+                  className="template-card"
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onClick={() => onSelectTemplate(template.id)}
+                >
+                  <span className="template-card__name">{displayName}</span>
+                  {visibleStatus ? (
+                    <span className="template-card__status">{visibleStatus}</span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="template-sidebar__footer">
+            {canToggleListNav ? (
               <button
-                key={template.id}
-                className="template-card"
+                className="icon-button"
                 type="button"
-                role="option"
-                aria-selected={selected}
-                onClick={() => onSelectTemplate(template.id)}
+                onClick={onToggleListNav}
+                aria-label={
+                  isListNavCollapsed ? 'テンプレート一覧を開く' : 'テンプレート一覧を閉じる'
+                }
+                aria-expanded={!isListNavCollapsed}
+                data-tooltip={
+                  isListNavCollapsed ? 'テンプレート一覧を開く' : 'テンプレート一覧を閉じる'
+                }
               >
-                <span className="template-card__name">{displayName}</span>
-                {visibleStatus ? (
-                  <span className="template-card__status">{visibleStatus}</span>
-                ) : null}
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5z" />
+                  <path d="M9 3v18" />
+                  <path d="M6.5 7h.01" />
+                  <path d="M6.5 11h.01" />
+                </svg>
               </button>
-            );
-          })}
-        </div>
-
-        <div className="template-sidebar__footer">
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onToggleListNav}
-            aria-label={isListNavCollapsed ? 'テンプレート一覧を開く' : 'テンプレート一覧を閉じる'}
-            aria-expanded={!isListNavCollapsed}
-            data-tooltip={
-              isListNavCollapsed ? 'テンプレート一覧を開く' : 'テンプレート一覧を閉じる'
-            }
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5z" />
-              <path d="M9 3v18" />
-              <path d="M6.5 7h.01" />
-              <path d="M6.5 11h.01" />
-            </svg>
-          </button>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={onBackToNotes}
-            aria-label="Note一覧へ移動"
-            data-tooltip="Note一覧へ移動"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M6 4h12v16H6z" />
-              <path d="M9 8h6" />
-              <path d="M9 12h6" />
-              <path d="M9 16h4" />
-            </svg>
-          </button>
-        </div>
-      </aside>
-      {!isListNavCollapsed ? (
+            ) : null}
+            <button
+              className="icon-button"
+              type="button"
+              onClick={onBackToNotes}
+              aria-label="Note一覧へ移動"
+              data-tooltip="Note一覧へ移動"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M6 4h12v16H6z" />
+                <path d="M9 8h6" />
+                <path d="M9 12h6" />
+                <path d="M9 16h4" />
+              </svg>
+            </button>
+          </div>
+        </aside>
+      ) : null}
+      {showTemplateList && showTemplateEditor && !isListNavCollapsed ? (
         <div
           className="pane-resizer"
           role="separator"
@@ -207,88 +223,103 @@ export function TemplateManager({
         />
       ) : null}
 
-      <section className="template-editor" aria-label="選択中のテンプレート">
-        {!selectedTemplate ? (
-          <div className="template-editor__empty">
-            <p>テンプレートを選択するか、新しく作成してください。</p>
-          </div>
-        ) : (
-          <>
-            <header className="template-editor__toolbar">
-              <label className="template-name-field">
-                <span className="visually-hidden">テンプレート名</span>
-                <input
-                  value={selectedTemplate.name}
-                  onChange={(event) => onChangeTemplateName(event.currentTarget.value)}
-                  onBlur={onFlush}
-                  placeholder="テンプレート名"
-                />
-              </label>
-              <button
-                className="icon-button"
-                type="button"
-                onClick={() => onCreateNoteFromTemplate(selectedTemplate.id)}
-                disabled={!selectedCompletion?.complete}
-                aria-label="このテンプレートでNoteを作成"
-                data-tooltip="このテンプレートでNoteを作成"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M6 3h9l3 3v15H6z" />
-                  <path d="M15 3v4h4" />
-                  <path d="M12 11v6" />
-                  <path d="M9 14h6" />
-                </svg>
-              </button>
-              <button
-                className="delete-button"
-                type="button"
-                onClick={onDeleteTemplate}
-                aria-label="テンプレートを削除"
-                data-tooltip="テンプレートを削除"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M3 6h18" />
-                  <path d="M8 6V4h8v2" />
-                  <path d="M6 6l1 15h10l1-15" />
-                  <path d="M10 10v7" />
-                  <path d="M14 10v7" />
-                </svg>
-              </button>
-            </header>
-
-            {selectedCompletion &&
-            getVisibleTemplateStatus(selectedTemplate, selectedCompletion.reason) ? (
-              <div className="template-status" role="status">
-                {getVisibleTemplateStatus(selectedTemplate, selectedCompletion.reason)}
-              </div>
-            ) : null}
-
-            {storageError ? (
-              <div className="storage-error" role="alert">
-                <strong>保存できません。</strong>
-                <span>{storageError}</span>
-              </div>
-            ) : null}
-
-            <div
-              ref={editorShellRef}
-              className="editor-shell"
-              onBlurCapture={handleEditorBlur}
-              onPasteCapture={handleEditorPaste}
-            >
-              <MDXEditor
-                ref={editorRef}
-                markdown={selectedTemplate.markdown}
-                onChange={(markdown) =>
-                  onChangeTemplateMarkdown(normalizeSupportedMarkdown(markdown))
-                }
-                plugins={editorPlugins}
-                contentEditableClassName="jot-editor"
-              />
+      {showTemplateEditor ? (
+        <section className="template-editor" aria-label="選択中のテンプレート">
+          {!selectedTemplate ? (
+            <div className="template-editor__empty">
+              <p>テンプレートを選択するか、新しく作成してください。</p>
             </div>
-          </>
-        )}
-      </section>
+          ) : (
+            <>
+              <header className="template-editor__toolbar">
+                {isSmallScreen ? (
+                  <button
+                    className="back-button"
+                    type="button"
+                    onClick={onBackToTemplateList}
+                    aria-label="テンプレート一覧へ戻る"
+                    data-tooltip="テンプレート一覧へ戻る"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M15 5l-7 7 7 7" />
+                    </svg>
+                  </button>
+                ) : null}
+                <label className="template-name-field">
+                  <span className="visually-hidden">テンプレート名</span>
+                  <input
+                    value={selectedTemplate.name}
+                    onChange={(event) => onChangeTemplateName(event.currentTarget.value)}
+                    onBlur={onFlush}
+                    placeholder="テンプレート名"
+                  />
+                </label>
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={() => onCreateNoteFromTemplate(selectedTemplate.id)}
+                  disabled={!selectedCompletion?.complete}
+                  aria-label="このテンプレートでNoteを作成"
+                  data-tooltip="このテンプレートでNoteを作成"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M6 3h9l3 3v15H6z" />
+                    <path d="M15 3v4h4" />
+                    <path d="M12 11v6" />
+                    <path d="M9 14h6" />
+                  </svg>
+                </button>
+                <button
+                  className="delete-button"
+                  type="button"
+                  onClick={onDeleteTemplate}
+                  aria-label="テンプレートを削除"
+                  data-tooltip="テンプレートを削除"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4h8v2" />
+                    <path d="M6 6l1 15h10l1-15" />
+                    <path d="M10 10v7" />
+                    <path d="M14 10v7" />
+                  </svg>
+                </button>
+              </header>
+
+              {selectedCompletion &&
+              getVisibleTemplateStatus(selectedTemplate, selectedCompletion.reason) ? (
+                <div className="template-status" role="status">
+                  {getVisibleTemplateStatus(selectedTemplate, selectedCompletion.reason)}
+                </div>
+              ) : null}
+
+              {storageError ? (
+                <div className="storage-error" role="alert">
+                  <strong>保存できません。</strong>
+                  <span>{storageError}</span>
+                </div>
+              ) : null}
+
+              <div
+                ref={editorShellRef}
+                className="editor-shell"
+                onBlurCapture={handleEditorBlur}
+                onPasteCapture={handleEditorPaste}
+              >
+                <MDXEditor
+                  ref={editorRef}
+                  markdown={selectedTemplate.markdown}
+                  onChange={(markdown) =>
+                    onChangeTemplateMarkdown(normalizeSupportedMarkdown(markdown))
+                  }
+                  plugins={editorPlugins}
+                  contentEditableClassName="jot-editor"
+                />
+              </div>
+            </>
+          )}
+        </section>
+      ) : null}
     </main>
   );
 
