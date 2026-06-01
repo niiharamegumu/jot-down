@@ -322,6 +322,23 @@ describe('EditorPane', () => {
     expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] aa');
   });
 
+  it('inserts pasted Markdown through the Markdown editor import path', () => {
+    const onMarkdownChange = vi.fn();
+    mockGetMarkdown.mockReturnValue('# 今日やること\n- [ ] 買い物');
+    renderEditor({ onMarkdownChange, markdown: '' });
+    mockSetMarkdown.mockClear();
+    mockInsertMarkdown.mockClear();
+
+    fireEvent.paste(
+      screen.getByLabelText('Markdown editor'),
+      createPasteEventProperties('# 今日やること\n- [ ] 買い物')
+    );
+
+    expect(mockSetMarkdown).toHaveBeenCalledWith('# 今日やること\n- [ ] 買い物');
+    expect(mockInsertMarkdown).not.toHaveBeenCalled();
+    expect(onMarkdownChange).toHaveBeenCalledWith('# 今日やること\n- [ ] 買い物');
+  });
+
   it('reimports pasted plain URLs as Markdown links so they become clickable', () => {
     const animationFrameCallbacks: FrameRequestCallback[] = [];
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
@@ -335,7 +352,7 @@ describe('EditorPane', () => {
     animationFrameCallbacks.length = 0;
     mockSetMarkdown.mockClear();
 
-    fireEvent.paste(screen.getByLabelText('Markdown editor'));
+    fireEvent.paste(screen.getByLabelText('Markdown editor'), createPasteEventProperties(''));
     animationFrameCallbacks.at(-1)?.(0);
 
     const normalizedMarkdown = '参考[https://example.com/spec](https://example.com/spec)を見る';
@@ -370,6 +387,60 @@ describe('EditorPane', () => {
     await user.click(screen.getByRole('button', { name: 'Noteを複製' }));
 
     expect(onDuplicateNote).toHaveBeenCalledTimes(1);
+  });
+
+  it('copies the visible note Markdown to the clipboard', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const restoreClipboard = mockClipboard(writeText);
+
+    try {
+      renderEditor({ markdown: '# 見出し\n- [ ] タスク' });
+
+      await user.click(screen.getByRole('button', { name: 'Note Markdownをコピー' }));
+
+      expect(writeText).toHaveBeenCalledWith('# 見出し\n- [ ] タスク');
+      expect(await screen.findByText('コピーしました')).toBeInTheDocument();
+    } finally {
+      restoreClipboard();
+    }
+  });
+
+  it('falls back to selection copy when clipboard writing fails', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockRejectedValue(new Error('clipboard unavailable'));
+    const restoreClipboard = mockClipboard(writeText);
+    const { execCommand, restoreExecCommand } = mockExecCommand(true);
+
+    try {
+      renderEditor({ markdown: '# フォールバック' });
+
+      await user.click(screen.getByRole('button', { name: 'Note Markdownをコピー' }));
+
+      expect(execCommand).toHaveBeenCalledWith('copy');
+      expect(await screen.findByText('コピーしました')).toBeInTheDocument();
+    } finally {
+      restoreClipboard();
+      restoreExecCommand();
+    }
+  });
+
+  it('shows a failure message when all note Markdown copy methods fail', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockRejectedValue(new Error('clipboard unavailable'));
+    const restoreClipboard = mockClipboard(writeText);
+    const { restoreExecCommand } = mockExecCommand(false);
+
+    try {
+      renderEditor();
+
+      await user.click(screen.getByRole('button', { name: 'Note Markdownをコピー' }));
+
+      expect(await screen.findByText('コピーできませんでした')).toBeInTheDocument();
+    } finally {
+      restoreClipboard();
+      restoreExecCommand();
+    }
   });
 
   it('inserts a selected template into the note Markdown', async () => {
@@ -433,4 +504,48 @@ function selectText(node: ChildNode | null) {
   const selection = window.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(range);
+}
+
+function mockClipboard(writeText: (value: string) => Promise<void>) {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText }
+  });
+
+  return () => {
+    if (originalDescriptor) {
+      Object.defineProperty(navigator, 'clipboard', originalDescriptor);
+    } else {
+      Reflect.deleteProperty(navigator, 'clipboard');
+    }
+  };
+}
+
+function mockExecCommand(result: boolean) {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand');
+  const execCommand = vi.fn().mockReturnValue(result);
+  Object.defineProperty(document, 'execCommand', {
+    configurable: true,
+    value: execCommand
+  });
+
+  return {
+    execCommand,
+    restoreExecCommand: () => {
+      if (originalDescriptor) {
+        Object.defineProperty(document, 'execCommand', originalDescriptor);
+      } else {
+        Reflect.deleteProperty(document, 'execCommand');
+      }
+    }
+  };
+}
+
+function createPasteEventProperties(text: string) {
+  return {
+    clipboardData: {
+      getData: (type: string) => (type === 'text/plain' ? text : '')
+    }
+  };
 }
