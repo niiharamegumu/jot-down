@@ -1,5 +1,10 @@
 import type { MDXEditorMethods } from '@mdxeditor/editor';
 import { normalizeSupportedMarkdown } from '../domain/note';
+import {
+  findTextPosition,
+  getTextOffset,
+  selectMdxEditorTextOffset
+} from './mdxEditorSelectionPlugin';
 
 type TextSelectionSnapshot = {
   offset: number;
@@ -55,16 +60,19 @@ function captureTextSelectionSnapshot(root: HTMLElement): TextSelectionSnapshot 
 
 function restoreTextSelectionSnapshot(root: HTMLElement, snapshot: TextSelectionSnapshot) {
   restoreScrollPositions(snapshot.scrollPositions);
-  focusWithoutScrolling(root);
 
-  const position = findTextPosition(root, snapshot.offset);
-  const range = document.createRange();
-  range.setStart(position.node, position.offset);
-  range.collapse(true);
+  if (!selectMdxEditorTextOffset(root, snapshot.offset)) {
+    focusWithoutScrolling(root);
 
-  const selection = window.getSelection();
-  selection?.removeAllRanges();
-  selection?.addRange(range);
+    const position = findTextPosition(root, snapshot.offset);
+    const range = document.createRange();
+    range.setStart(position.node, position.offset);
+    range.collapse(true);
+
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
   restoreScrollPositions(snapshot.scrollPositions);
 }
 
@@ -104,40 +112,4 @@ function restoreScrollPositions(scrollPositions: ScrollPositionSnapshot[]) {
     target.scrollTop = top;
     target.scrollLeft = left;
   }
-}
-
-function getTextOffset(root: Node, target: Node, targetOffset: number): number {
-  const range = document.createRange();
-  range.selectNodeContents(root);
-
-  try {
-    range.setEnd(target, targetOffset);
-    return range.toString().length;
-  } catch {
-    return root.textContent?.length ?? 0;
-  }
-}
-
-function findTextPosition(root: Node, targetOffset: number): { node: Node; offset: number } {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let remainingOffset = targetOffset;
-  let lastTextNode: Node | null = null;
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    const textLength = node.textContent?.length ?? 0;
-    lastTextNode = node;
-
-    if (remainingOffset <= textLength) {
-      return { node, offset: remainingOffset };
-    }
-
-    remainingOffset -= textLength;
-  }
-
-  if (lastTextNode) {
-    return { node: lastTextNode, offset: lastTextNode.textContent?.length ?? 0 };
-  }
-
-  return { node: root, offset: 0 };
 }

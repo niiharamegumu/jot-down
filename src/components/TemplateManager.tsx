@@ -15,6 +15,7 @@ import {
 } from '../domain/noteTemplate';
 import { normalizeSupportedMarkdown } from '../domain/note';
 import { syncNormalizedEditorMarkdown } from './editorMarkdownSync';
+import { mdxEditorSelectionPlugin } from './mdxEditorSelectionPlugin';
 
 type TemplateManagerProps = {
   templates: NoteTemplate[];
@@ -37,6 +38,7 @@ type TemplateManagerProps = {
 const editorPlugins = [
   headingsPlugin(),
   listsPlugin(),
+  mdxEditorSelectionPlugin(),
   linkPlugin(),
   linkDialogPlugin(),
   markdownShortcutPlugin()
@@ -77,7 +79,9 @@ export function TemplateManager({
     if (previousTemplateIdRef.current !== selectedTemplate.id) {
       editorRef.current?.setMarkdown(selectedTemplate.markdown);
       previousTemplateIdRef.current = selectedTemplate.id;
-      window.requestAnimationFrame(focusEditorStart);
+      window.requestAnimationFrame(() =>
+        editorRef.current?.focus(undefined, { defaultSelection: 'rootStart' })
+      );
     }
   }, [selectedTemplate]);
 
@@ -248,23 +252,6 @@ export function TemplateManager({
       </section>
     </main>
   );
-
-  function focusEditorStart() {
-    const editor = getEditorRoot();
-    if (!editor) {
-      return;
-    }
-
-    editor.focus();
-
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(true);
-
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-  }
 
   function handleEditorBlur() {
     syncSelectedTemplateMarkdown();

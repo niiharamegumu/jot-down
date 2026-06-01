@@ -13,7 +13,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
-  type MouseEvent
+  type MouseEvent as ReactMouseEvent
 } from 'react';
 import type { Note } from '../domain/note';
 import { normalizeSupportedMarkdown, toggleTaskAtIndex } from '../domain/note';
@@ -24,6 +24,7 @@ import {
   restoreTaskSelectionSnapshot,
   type TaskSelectionSnapshot
 } from './editorTaskSelection';
+import { isTaskCheckboxHit, mdxEditorSelectionPlugin } from './mdxEditorSelectionPlugin';
 
 type EditorPaneProps = {
   note: Note | null;
@@ -44,11 +45,11 @@ type EditorPaneProps = {
 const editorPlugins = [
   headingsPlugin(),
   listsPlugin(),
+  mdxEditorSelectionPlugin(),
   linkPlugin(),
   linkDialogPlugin(),
   markdownShortcutPlugin()
 ];
-const taskCheckboxHitAreaWidthPx = 24;
 const updatedAtFormatter = new Intl.DateTimeFormat('ja-JP', {
   year: 'numeric',
   month: 'long',
@@ -91,7 +92,9 @@ export function EditorPane({
     if (previousNoteIdRef.current !== note.id) {
       editorRef.current?.setMarkdown(markdown);
       previousNoteIdRef.current = note.id;
-      window.requestAnimationFrame(focusEditorStart);
+      window.requestAnimationFrame(() =>
+        editorRef.current?.focus(undefined, { defaultSelection: 'rootStart' })
+      );
     }
   }, [markdown, note]);
 
@@ -209,16 +212,14 @@ export function EditorPane({
     </main>
   );
 
-  function handleTaskClick(event: MouseEvent<HTMLElement>) {
+  function handleTaskClick(event: ReactMouseEvent<HTMLElement>) {
     const target = event.target instanceof HTMLElement ? event.target : null;
     const checkbox = target?.closest('[role="checkbox"][aria-checked]');
     if (!(checkbox instanceof HTMLElement)) {
       return;
     }
 
-    const checkboxRect = checkbox.getBoundingClientRect();
-    const clickX = event.clientX - checkboxRect.left;
-    if (clickX < 0 || clickX > taskCheckboxHitAreaWidthPx) {
+    if (!isTaskCheckboxHit(checkbox, event.clientX)) {
       return;
     }
 
@@ -322,23 +323,6 @@ export function EditorPane({
   function handleOpenTemplateManagement() {
     setTemplateMenuOpen(false);
     onOpenTemplateManagement();
-  }
-
-  function focusEditorStart() {
-    const editor = getEditorRoot();
-    if (!editor) {
-      return;
-    }
-
-    editor.focus();
-
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(true);
-
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
   }
 
   function getEditorRoot(): HTMLElement | null {

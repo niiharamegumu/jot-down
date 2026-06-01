@@ -9,15 +9,18 @@ vi.mock('@mdxeditor/editor', async () => {
   const React = await import('react');
 
   return {
+    createRootEditorSubscription$: Symbol('createRootEditorSubscription$'),
     headingsPlugin: vi.fn(),
     linkDialogPlugin: vi.fn(),
     linkPlugin: vi.fn(),
     listsPlugin: vi.fn(),
     markdownShortcutPlugin: vi.fn(),
+    realmPlugin: vi.fn((plugin) => () => plugin),
     MDXEditor: React.forwardRef(function MockMDXEditor({ markdown }: { markdown: string }, ref) {
       React.useImperativeHandle(ref, () => ({
         getMarkdown: mockGetMarkdown,
-        setMarkdown: mockSetMarkdown
+        setMarkdown: mockSetMarkdown,
+        focus: (callback?: () => void) => callback?.()
       }));
 
       return <textarea aria-label="Markdown editor" value={markdown} readOnly />;

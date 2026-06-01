@@ -12,11 +12,13 @@ vi.mock('@mdxeditor/editor', async () => {
   const React = await import('react');
 
   return {
+    createRootEditorSubscription$: Symbol('createRootEditorSubscription$'),
     headingsPlugin: vi.fn(),
     linkDialogPlugin: vi.fn(),
     linkPlugin: vi.fn(),
     listsPlugin: vi.fn(),
     markdownShortcutPlugin: vi.fn(),
+    realmPlugin: vi.fn((plugin) => () => plugin),
     MDXEditor: React.forwardRef(function MockMDXEditor(
       { markdown, onChange }: { markdown: string; onChange: (markdown: string) => void },
       ref
@@ -119,6 +121,23 @@ describe('EditorPane', () => {
     fireEvent.click(firstTask, { clientX: 1 });
 
     expect(onMarkdownChange).toHaveBeenCalledWith('- [x] 買い物\n- [x] メール返信');
+  });
+
+  it('does not toggle when clicking task text outside the checkbox marker', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange });
+
+    const firstTask = screen.getAllByRole('checkbox')[0];
+    const mouseDown = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      clientX: 80
+    });
+    firstTask.dispatchEvent(mouseDown);
+    fireEvent.click(firstTask, { clientX: 80, clientY: 12 });
+
+    expect(mouseDown.defaultPrevented).toBe(false);
+    expect(onMarkdownChange).not.toHaveBeenCalled();
   });
 
   it('toggles the selected task with command enter', () => {

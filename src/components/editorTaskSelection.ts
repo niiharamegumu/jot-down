@@ -1,3 +1,9 @@
+import {
+  findTextPosition,
+  getTextOffset,
+  selectMdxEditorTextOffset
+} from './mdxEditorSelectionPlugin';
+
 export type TaskSelectionSnapshot = {
   noteId: string;
   taskIndex: number;
@@ -42,16 +48,19 @@ export function restoreTaskSelectionSnapshot(
   }
 
   restoreScrollPositions(snapshot.scrollPositions);
-  focusWithoutScrolling(checkbox);
 
-  const position = findTextPosition(checkbox, snapshot.offset);
-  const range = document.createRange();
-  range.setStart(position.node, position.offset);
-  range.collapse(true);
+  if (!selectMdxEditorTextOffset(checkbox, snapshot.offset)) {
+    focusWithoutScrolling(checkbox);
 
-  const selection = window.getSelection();
-  selection?.removeAllRanges();
-  selection?.addRange(range);
+    const position = findTextPosition(checkbox, snapshot.offset);
+    const range = document.createRange();
+    range.setStart(position.node, position.offset);
+    range.collapse(true);
+
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
   restoreScrollPositions(snapshot.scrollPositions);
   scheduleAnimationFrame(() => {
     if (snapshot.noteId === getCurrentNoteId()) {
@@ -96,44 +105,4 @@ function restoreScrollPositions(scrollPositions: ScrollPositionSnapshot[]) {
     target.scrollTop = top;
     target.scrollLeft = left;
   }
-}
-
-function getTextOffset(root: Node, target: Node, targetOffset: number): number {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let offset = 0;
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    if (node === target) {
-      return offset + targetOffset;
-    }
-
-    offset += node.textContent?.length ?? 0;
-  }
-
-  return offset;
-}
-
-function findTextPosition(root: Node, targetOffset: number): { node: Node; offset: number } {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let remainingOffset = targetOffset;
-  let lastTextNode: Node | null = null;
-
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    const textLength = node.textContent?.length ?? 0;
-    lastTextNode = node;
-
-    if (remainingOffset <= textLength) {
-      return { node, offset: remainingOffset };
-    }
-
-    remainingOffset -= textLength;
-  }
-
-  if (lastTextNode) {
-    return { node: lastTextNode, offset: lastTextNode.textContent?.length ?? 0 };
-  }
-
-  return { node: root, offset: 0 };
 }
