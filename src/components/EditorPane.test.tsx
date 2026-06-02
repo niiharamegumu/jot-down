@@ -444,6 +444,23 @@ describe('EditorPane', () => {
     expect(onMarkdownChange).not.toHaveBeenCalledWith('- [ ] xxx\n- [ ] bbb\n- [ ] aaa');
   });
 
+  it('ignores delayed checklist normalization after moving a plain list item', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '- [ ] xxx\n\n- aaa\n- bbb' });
+
+    selectText(screen.getByText('aaa').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowDown',
+      altKey: true
+    });
+    onMarkdownChange.mockClear();
+    mockGetMarkdown.mockReturnValue('- [ ] xxx\n- [ ] bbb\n- [ ] aaa');
+
+    fireEvent.blur(screen.getByLabelText('Markdown editor'));
+
+    expect(onMarkdownChange).not.toHaveBeenCalled();
+  });
+
   it('keeps the moved Markdown line unchanged when the editor exports a normalized list', () => {
     const onMarkdownChange = vi.fn();
     mockSetMarkdownSideEffect = () => '- [ ] 子A1\n- [ ] 親A\n- [ ] 親B';
@@ -543,6 +560,38 @@ describe('EditorPane', () => {
     expect(mockSetMarkdown).toHaveBeenCalledWith('# 今日やること\n- [ ] 買い物');
     expect(mockInsertMarkdown).not.toHaveBeenCalled();
     expect(onMarkdownChange).toHaveBeenCalledWith('# 今日やること\n- [ ] 買い物');
+  });
+
+  it('keeps pasted Markdown unchanged when the editor exports a normalized checklist', () => {
+    const onMarkdownChange = vi.fn();
+    mockSetMarkdownSideEffect = () => '- [ ] xxx\n- [ ] aaa\n- [ ] bbb';
+    renderEditor({ onMarkdownChange, markdown: '' });
+    onMarkdownChange.mockClear();
+
+    fireEvent.paste(
+      screen.getByLabelText('Markdown editor'),
+      createPasteEventProperties('- [ ] xxx\n\n- aaa\n- bbb')
+    );
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] xxx\n\n- aaa\n- bbb');
+    expect(onMarkdownChange).not.toHaveBeenCalledWith('- [ ] xxx\n- [ ] aaa\n- [ ] bbb');
+  });
+
+  it('replaces the whole note on full-selection paste without editor insertion normalization', () => {
+    const onMarkdownChange = vi.fn();
+    mockSetMarkdownSideEffect = () => '- [ ] xxx\n- [ ] aaa\n- [ ] bbb';
+    renderEditor({ onMarkdownChange, markdown: '- [ ] old\n- [ ] other' });
+    onMarkdownChange.mockClear();
+
+    selectContents(screen.getByLabelText('Markdown editor'));
+    fireEvent.paste(
+      screen.getByLabelText('Markdown editor'),
+      createPasteEventProperties('- [ ] xxx\n\n- aaa\n- bbb')
+    );
+
+    expect(mockInsertMarkdown).not.toHaveBeenCalled();
+    expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] xxx\n\n- aaa\n- bbb');
+    expect(onMarkdownChange).not.toHaveBeenCalledWith('- [ ] xxx\n- [ ] aaa\n- [ ] bbb');
   });
 
   it('reimports pasted plain URLs as Markdown links so they become clickable', () => {
@@ -764,6 +813,14 @@ function renderControlledEditor(initialMarkdown: string): ReturnType<typeof rend
 function selectText(node: ChildNode | null) {
   if (!node) {
     throw new Error('Expected selectable text node');
+  }
+
+  selectContents(node);
+}
+
+function selectContents(node: Node | null) {
+  if (!node) {
+    throw new Error('Expected selectable node');
   }
 
   const range = document.createRange();

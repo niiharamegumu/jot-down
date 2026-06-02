@@ -92,7 +92,7 @@ export function EditorPane({
   const editorShellRef = useRef<HTMLElement>(null);
   const previousNoteIdRef = useRef<string | null>(null);
   const currentNoteIdRef = useRef<string | null>(null);
-  const pendingLineMoveMarkdownRef = useRef<string | null>(null);
+  const pendingProgrammaticMarkdownRef = useRef<string | null>(null);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
@@ -133,7 +133,7 @@ export function EditorPane({
     }
 
     if (previousNoteIdRef.current !== note.id) {
-      pendingLineMoveMarkdownRef.current = null;
+      pendingProgrammaticMarkdownRef.current = null;
       editorRef.current?.setMarkdown(markdown);
       previousNoteIdRef.current = note.id;
       window.requestAnimationFrame(() =>
@@ -443,8 +443,7 @@ export function EditorPane({
 
   function toggleTask(taskIndex: number, selectionSnapshot: TaskSelectionSnapshot | null = null) {
     const nextMarkdown = normalizeSupportedMarkdown(toggleTaskAtIndex(markdown, taskIndex));
-    editorRef.current?.setMarkdown(nextMarkdown);
-    onMarkdownChange(nextMarkdown);
+    applyProgrammaticMarkdownChange(nextMarkdown);
 
     if (selectionSnapshot) {
       window.requestAnimationFrame(() => restoreTaskSelection(selectionSnapshot));
@@ -483,23 +482,15 @@ export function EditorPane({
       editorRoot,
       nextMarkdown
     );
-    pendingLineMoveMarkdownRef.current = nextMarkdown;
-    editorRef.current?.setMarkdown(nextMarkdown);
-    onMarkdownChange(nextMarkdown);
+    applyProgrammaticMarkdownChange(nextMarkdown);
 
     if (selectionSnapshot) {
-      window.requestAnimationFrame(() => {
-        restoreNoteLineSelection(selectionSnapshot);
-        clearPendingLineMoveMarkdown(nextMarkdown);
-      });
-      return;
+      window.requestAnimationFrame(() => restoreNoteLineSelection(selectionSnapshot));
     }
-
-    window.requestAnimationFrame(() => clearPendingLineMoveMarkdown(nextMarkdown));
   }
 
   function handleMarkdownChange(nextMarkdown: string) {
-    if (pendingLineMoveMarkdownRef.current) {
+    if (shouldIgnorePendingProgrammaticMarkdown(nextMarkdown)) {
       return;
     }
 
@@ -521,10 +512,10 @@ export function EditorPane({
       event.preventDefault();
       event.stopPropagation();
       const normalizedPastedText = normalizeSupportedMarkdown(pastedText);
+      const editorRoot = getEditorRoot();
 
-      if (markdown.trim() === '') {
-        editorRef.current?.setMarkdown(normalizedPastedText);
-        onMarkdownChange(normalizedPastedText);
+      if (markdown.trim() === '' || isEntireEditorSelection(editorRoot)) {
+        applyProgrammaticMarkdownChange(normalizedPastedText);
         return;
       }
 
@@ -539,7 +530,8 @@ export function EditorPane({
   }
 
   function syncNormalizedEditorMarkdown() {
-    if (pendingLineMoveMarkdownRef.current) {
+    const currentMarkdown = editorRef.current?.getMarkdown() ?? markdown;
+    if (shouldIgnorePendingProgrammaticMarkdown(currentMarkdown)) {
       return;
     }
 
@@ -584,9 +576,59 @@ export function EditorPane({
     restoreNoteLineSelectionSnapshot(snapshot, () => currentNoteIdRef.current, getEditorRoot());
   }
 
-  function clearPendingLineMoveMarkdown(expectedMarkdown: string) {
-    if (pendingLineMoveMarkdownRef.current === expectedMarkdown) {
-      pendingLineMoveMarkdownRef.current = null;
+  function applyProgrammaticMarkdownChange(nextMarkdown: string) {
+    pendingProgrammaticMarkdownRef.current = nextMarkdown;
+    editorRef.current?.setMarkdown(nextMarkdown);
+    onMarkdownChange(nextMarkdown);
+  }
+
+  function shouldIgnorePendingProgrammaticMarkdown(nextMarkdown: string): boolean {
+    const pendingProgrammaticMarkdown = pendingProgrammaticMarkdownRef.current;
+    if (!pendingProgrammaticMarkdown) {
+      return false;
     }
+
+    if (hasSameReadableNoteLines(pendingProgrammaticMarkdown, nextMarkdown)) {
+      return true;
+    }
+
+    pendingProgrammaticMarkdownRef.current = null;
+    return false;
+  }
+
+  function hasSameReadableNoteLines(left: string, right: string): boolean {
+    const leftLines = getReadableNoteLines(left);
+    const rightLines = getReadableNoteLines(right);
+    return (
+      leftLines.length === rightLines.length &&
+      leftLines.every((line, index) => line === rightLines[index])
+    );
+  }
+
+  function getReadableNoteLines(value: string): string[] {
+    return value
+      .split(/\r?\n/)
+      .map((line) =>
+        line
+          .replace(/^\s{0,3}#{1,6}\s+/, '')
+          .replace(/^\s*[-*]\s+\[(?: |x|X)\]\s+/, '')
+          .replace(/^\s*[-*]\s+/, '')
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+          .replace(/\*\*([^*]+)\*\*/g, '$1')
+          .replace(/\s+/g, ' ')
+          .trim()
+      )
+      .filter(Boolean);
+  }
+
+  function isEntireEditorSelection(editorRoot: HTMLElement | null): boolean {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !editorRoot) {
+      return false;
+    }
+
+    const selectedText = selection.toString().replace(/\s+/g, ' ').trim();
+    const editorText = (editorRoot.textContent ?? '').replace(/\s+/g, ' ').trim();
+    return selectedText !== '' && selectedText === editorText;
   }
 }

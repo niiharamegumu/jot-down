@@ -23,6 +23,28 @@ describe('editor line selection', () => {
       root.remove();
     }
   });
+
+  it('maps editor lines to Markdown lines by position instead of rendered text', () => {
+    const root = document.createElement('div');
+    root.setAttribute('contenteditable', 'true');
+    root.innerHTML = `
+      <ul>
+        <li role="checkbox"><span data-lexical-text="true">xxx</span></li>
+        <li role="checkbox"><span data-lexical-text="true">testテスト</span></li>
+      </ul>
+    `;
+    document.body.append(root);
+
+    try {
+      const bracketedText = root.querySelectorAll('li span[data-lexical-text="true"]')[1]
+        ?.firstChild;
+      selectText(bracketedText);
+
+      expect(getSelectedNoteLineIndex(root, '- [ ] xxx\n- [ ] [test]テスト')).toBe(1);
+    } finally {
+      root.remove();
+    }
+  });
 });
 
 function selectText(node: ChildNode | null | undefined) {
