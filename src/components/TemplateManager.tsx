@@ -7,7 +7,7 @@ import {
   MDXEditor,
   type MDXEditorMethods
 } from '@mdxeditor/editor';
-import { useEffect, useRef, type CSSProperties, type PointerEvent } from 'react';
+import { useEffect, useRef, type CSSProperties, type FocusEvent, type PointerEvent } from 'react';
 import {
   getNoteTemplateCompletion,
   sortNoteTemplatesByName,
@@ -15,6 +15,7 @@ import {
 } from '../domain/noteTemplate';
 import { normalizeSupportedMarkdown } from '../domain/note';
 import { syncNormalizedEditorMarkdown } from './editorMarkdownSync';
+import { installMdxEditorFloatingUiFixes, isMdxEditorFloatingUiElement } from './editorFloatingUi';
 import { mdxEditorSelectionPlugin } from './mdxEditorSelectionPlugin';
 
 type TemplateManagerProps = {
@@ -89,6 +90,8 @@ export function TemplateManager({
     : null;
   const showTemplateList = !isSmallScreen || mobileView === 'list';
   const showTemplateEditor = !isSmallScreen || mobileView === 'editor';
+
+  useEffect(() => installMdxEditorFloatingUiFixes(), []);
 
   useEffect(() => {
     if (!selectedTemplate) {
@@ -323,7 +326,11 @@ export function TemplateManager({
     </main>
   );
 
-  function handleEditorBlur() {
+  function handleEditorBlur(event: FocusEvent<HTMLDivElement>) {
+    if (isMdxEditorFloatingUiElement(event.relatedTarget)) {
+      return;
+    }
+
     syncSelectedTemplateMarkdown();
     onFlush();
   }

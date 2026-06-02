@@ -369,6 +369,29 @@ describe('EditorPane', () => {
     expect(onFlush).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the editor state while focus moves to the link dialog', () => {
+    const onFlush = vi.fn();
+    renderEditor({ onFlush });
+    mockSetMarkdown.mockClear();
+
+    const linkDialog = document.createElement('div');
+    linkDialog.setAttribute('role', 'dialog');
+    linkDialog.className = '_linkDialogPopoverContent_test';
+    const editLinkButton = document.createElement('button');
+    editLinkButton.setAttribute('aria-label', 'Edit link URL');
+    linkDialog.append(editLinkButton);
+    document.body.append(linkDialog);
+
+    try {
+      fireEvent.blur(screen.getByLabelText('Markdown editor'), { relatedTarget: editLinkButton });
+
+      expect(mockSetMarkdown).not.toHaveBeenCalled();
+      expect(onFlush).not.toHaveBeenCalled();
+    } finally {
+      linkDialog.remove();
+    }
+  });
+
   it('confirms deletion through the delete action', async () => {
     const user = userEvent.setup();
     const onDeleteNote = vi.fn();

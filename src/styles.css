@@ -871,6 +871,10 @@ h2 {
   text-underline-offset: 0.16em;
 }
 
+[class*="linkDialogPopoverContent"] button[aria-label="Remove link"] {
+  display: none;
+}
+
 .jot-editor ul {
   padding-left: 1.4rem;
 }
