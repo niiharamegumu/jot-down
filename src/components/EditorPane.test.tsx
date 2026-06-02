@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorPane } from './EditorPane';
 
@@ -7,6 +8,7 @@ const mockSetMarkdown = vi.fn();
 const mockInsertMarkdown = vi.fn();
 const mockGetMarkdown = vi.fn();
 const mockFocus = vi.fn((callback?: () => void) => callback?.());
+let mockSetMarkdownSideEffect: ((markdown: string) => string | void) | null = null;
 
 vi.mock('@mdxeditor/editor', async () => {
   const React = await import('react');
@@ -25,7 +27,13 @@ vi.mock('@mdxeditor/editor', async () => {
     ) {
       React.useImperativeHandle(ref, () => ({
         getMarkdown: mockGetMarkdown,
-        setMarkdown: mockSetMarkdown,
+        setMarkdown: (nextMarkdown: string) => {
+          mockSetMarkdown(nextMarkdown);
+          const exportedMarkdown = mockSetMarkdownSideEffect?.(nextMarkdown);
+          if (typeof exportedMarkdown === 'string') {
+            onChange(exportedMarkdown);
+          }
+        },
         insertMarkdown: mockInsertMarkdown,
         focus: mockFocus
       }));
@@ -39,6 +47,10 @@ vi.mock('@mdxeditor/editor', async () => {
           suppressContentEditableWarning
         >
           {markdown.split('\n').map((line, index) => {
+            if (line === '') {
+              return null;
+            }
+
             const task = line.match(/^\s*[-*]\s+\[( |x|X)\]\s+(.+)$/);
 
             if (!task) {
@@ -68,6 +80,11 @@ const note = {
 };
 
 afterEach(() => {
+  mockSetMarkdownSideEffect = null;
+  mockSetMarkdown.mockClear();
+  mockInsertMarkdown.mockClear();
+  mockGetMarkdown.mockReset();
+  mockFocus.mockClear();
   vi.restoreAllMocks();
 });
 
@@ -322,6 +339,161 @@ describe('EditorPane', () => {
     expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] aa');
   });
 
+  it('moves the selected note line up with option arrow up', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '- [ ] 買い物\n- [x] メール返信\n本文' });
+
+    selectText(screen.getByText('メール返信').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowUp',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('- [x] メール返信\n- [ ] 買い物\n本文');
+  });
+
+  it('does not move the selected note line with command option arrow up', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '- [ ] 買い物\n- [x] メール返信\n本文' });
+
+    selectText(screen.getByText('メール返信').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowUp',
+      altKey: true,
+      metaKey: true
+    });
+
+    expect(onMarkdownChange).not.toHaveBeenCalled();
+  });
+
+  it('moves the selected note line down with option arrow down', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '- [ ] 買い物\n本文\n- [x] メール返信' });
+
+    selectText(screen.getByText('本文').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowDown',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] 買い物\n- [x] メール返信\n本文');
+  });
+
+  it('moves the selected note line after an omitted blank editor line', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({
+      onMarkdownChange,
+      markdown: '# 見出しA\n- [ ] A1\n\n# 見出しB\n- [ ] B1\n- [ ] B2'
+    });
+
+    selectText(screen.getByText('B2').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowUp',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith(
+      '# 見出しA\n- [ ] A1\n\n# 見出しB\n- [ ] B2\n- [ ] B1'
+    );
+  });
+
+  it('skips omitted blank editor lines when moving a note line', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: 'A\n\nB' });
+
+    selectText(screen.getByText('B').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowUp',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('B\n\nA');
+  });
+
+  it('keeps the moved Markdown line unchanged when the editor exports a normalized list', () => {
+    const onMarkdownChange = vi.fn();
+    mockSetMarkdownSideEffect = () => '- [ ] 子A1\n- [ ] 親A\n- [ ] 親B';
+    renderEditor({
+      onMarkdownChange,
+      markdown: '- [ ] 親A\n  - [ ] 子A1\n- [ ] 親B'
+    });
+    onMarkdownChange.mockClear();
+
+    selectText(screen.getByText('子A1').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowUp',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('  - [ ] 子A1\n- [ ] 親A\n- [ ] 親B');
+    expect(onMarkdownChange).not.toHaveBeenCalledWith('- [ ] 子A1\n- [ ] 親A\n- [ ] 親B');
+  });
+
+  it('keeps the moved Markdown line unchanged when blur sync reads a normalized list', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({
+      onMarkdownChange,
+      markdown: '- [ ] 親A\n  - [ ] 子A1\n- [ ] 親B'
+    });
+
+    selectText(screen.getByText('子A1').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowUp',
+      altKey: true
+    });
+    onMarkdownChange.mockClear();
+    mockGetMarkdown.mockReturnValue('- [ ] 子A1\n- [ ] 親A\n- [ ] 親B');
+
+    fireEvent.blur(screen.getByLabelText('Markdown editor'));
+
+    expect(onMarkdownChange).not.toHaveBeenCalled();
+  });
+
+  it('does not change note Markdown when a note line cannot move past the boundary', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '先頭\n本文' });
+
+    selectText(screen.getByText('先頭').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowUp',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps the cursor on the moved note line after option arrow movement', () => {
+    const animationFrameCallbacks: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      animationFrameCallbacks.push(callback);
+      return 1;
+    });
+
+    renderControlledEditor('- [ ] 買い物\n- [x] メール返信\n本文');
+    animationFrameCallbacks.at(-1)?.(0);
+    animationFrameCallbacks.length = 0;
+
+    selectText(screen.getByText('メール返信').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowUp',
+      altKey: true
+    });
+
+    expect(screen.getAllByRole('checkbox')[0]).toHaveTextContent('メール返信');
+    const restoreCursor = animationFrameCallbacks.at(-1);
+    if (!restoreCursor) {
+      throw new Error('Expected cursor restoration to be scheduled');
+    }
+
+    restoreCursor(0);
+
+    const movedTaskText = screen.getByText('メール返信').firstChild;
+    const selection = window.getSelection();
+    const range = selection?.getRangeAt(0);
+    expect(range?.startContainer).toBe(movedTaskText);
+    expect(range?.startOffset).toBe(0);
+  });
+
   it('inserts pasted Markdown through the Markdown editor import path', () => {
     const onMarkdownChange = vi.fn();
     mockGetMarkdown.mockReturnValue('# 今日やること\n- [ ] 買い物');
@@ -490,6 +662,18 @@ describe('EditorPane', () => {
     expect(mockInsertMarkdown).toHaveBeenCalledWith('# 会議');
     expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] 買い物\n# 会議');
   });
+
+  it('lists editor shortcuts in the toolbar help', () => {
+    renderEditor();
+
+    expect(screen.getByRole('button', { name: 'ショートカット一覧' })).toBeInTheDocument();
+    expect(screen.getByText('⌘ + Enter')).toBeInTheDocument();
+    expect(screen.getByText('タスクのチェックを切り替え')).toBeInTheDocument();
+    expect(screen.getByText('⌥ + ↑')).toBeInTheDocument();
+    expect(screen.getByText('行を上へ移動')).toBeInTheDocument();
+    expect(screen.getByText('⌥ + ↓')).toBeInTheDocument();
+    expect(screen.getByText('行を下へ移動')).toBeInTheDocument();
+  });
 });
 
 function renderEditor(
@@ -514,6 +698,33 @@ function renderEditor(
       {...props}
     />
   );
+}
+
+function renderControlledEditor(initialMarkdown: string): ReturnType<typeof render> {
+  function ControlledEditor() {
+    const [markdown, setMarkdown] = useState(initialMarkdown);
+
+    return (
+      <EditorPane
+        note={{ ...note, markdown }}
+        markdown={markdown}
+        updatedAt={note.updatedAt}
+        applicableTemplates={[]}
+        storageError={null}
+        appUpdateAvailable={false}
+        isApplyingAppUpdate={false}
+        onMarkdownChange={setMarkdown}
+        onFlush={vi.fn()}
+        onApplyAppUpdate={vi.fn()}
+        onDuplicateNote={vi.fn()}
+        onDeleteNote={vi.fn()}
+        onOpenTemplateManagement={vi.fn()}
+        onBackToList={vi.fn()}
+      />
+    );
+  }
+
+  return render(<ControlledEditor />);
 }
 
 function selectText(node: ChildNode | null) {

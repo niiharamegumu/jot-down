@@ -101,6 +101,39 @@ export function toggleTaskAtIndex(markdown: string, taskIndex: number): string {
     .join('\n');
 }
 
+export function moveNoteLine(
+  markdown: string,
+  lineIndex: number,
+  direction: 'up' | 'down'
+): string {
+  const lines = markdown.split(/\r?\n/);
+  const targetIndex = getNoteLineMovementTargetIndex(markdown, lineIndex, direction);
+  if (targetIndex < 0) {
+    return markdown;
+  }
+
+  const nextLines = [...lines];
+  const movingLine = nextLines[lineIndex];
+  nextLines[lineIndex] = nextLines[targetIndex];
+  nextLines[targetIndex] = movingLine;
+
+  return nextLines.join('\n');
+}
+
+export function getNoteLineMovementTargetIndex(
+  markdown: string,
+  lineIndex: number,
+  direction: 'up' | 'down'
+): number {
+  const lines = markdown.split(/\r?\n/);
+
+  if (lineIndex < 0 || lineIndex >= lines.length || isBlankNoteLine(lines[lineIndex])) {
+    return -1;
+  }
+
+  return findMovableNoteLineTargetIndex(lines, lineIndex, direction);
+}
+
 function stripMarkdownChrome(value: string): string {
   return value
     .replace(/^\s{0,3}#{1,6}\s+/, '')
@@ -141,4 +174,23 @@ function isInsideRange(offset: number, ranges: Array<{ start: number; end: numbe
 
 function isAngleBracketAutolink(line: string, offset: number, rawUrl: string): boolean {
   return line[offset - 1] === '<' && line[offset + rawUrl.length] === '>';
+}
+
+function findMovableNoteLineTargetIndex(
+  lines: string[],
+  lineIndex: number,
+  direction: 'up' | 'down'
+): number {
+  const step = direction === 'up' ? -1 : 1;
+  for (let index = lineIndex + step; index >= 0 && index < lines.length; index += step) {
+    if (!isBlankNoteLine(lines[index])) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function isBlankNoteLine(line: string): boolean {
+  return line.trim() === '';
 }

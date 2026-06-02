@@ -1,6 +1,12 @@
 import { createRootEditorSubscription$, realmPlugin } from '@mdxeditor/editor';
-import type { LexicalEditor } from 'lexical';
-import { $getNearestNodeFromDOMNode, $isElementNode, $isTextNode } from 'lexical';
+import type { LexicalEditor, LexicalNode } from 'lexical';
+import {
+  $getNearestNodeFromDOMNode,
+  $getSelection,
+  $isElementNode,
+  $isRangeSelection,
+  $isTextNode
+} from 'lexical';
 
 export const taskCheckboxHitAreaWidthPx = 24;
 
@@ -69,6 +75,42 @@ export function selectMdxEditorTextOffset(scope: HTMLElement, offset: number): b
 
   selectTextOffsetInEditor(editor, scope, offset);
   return true;
+}
+
+export function getSelectedMdxEditorElement(
+  scope: HTMLElement,
+  selector: string
+): HTMLElement | null {
+  const root = scope.closest('[contenteditable="true"]');
+  if (!(root instanceof HTMLElement)) {
+    return null;
+  }
+
+  const editor = editorsByRoot.get(root);
+  if (!editor) {
+    return null;
+  }
+
+  let selectedElement: HTMLElement | null = null;
+  editor.getEditorState().read(() => {
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection)) {
+      return;
+    }
+
+    let node: LexicalNode | null = selection.anchor.getNode();
+    while (node) {
+      const element = editor.getElementByKey(node.getKey());
+      if (element instanceof HTMLElement && element.matches(selector) && root.contains(element)) {
+        selectedElement = element;
+        return;
+      }
+
+      node = node.getParent();
+    }
+  });
+
+  return selectedElement;
 }
 
 export function getTextOffset(root: Node, target: Node, targetOffset: number): number {
