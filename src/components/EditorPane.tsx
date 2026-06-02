@@ -13,6 +13,7 @@ import {
   useRef,
   useState,
   type ClipboardEvent,
+  type FocusEvent,
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent
 } from 'react';
@@ -20,6 +21,7 @@ import type { Note } from '../domain/note';
 import { normalizeSupportedMarkdown, toggleTaskAtIndex } from '../domain/note';
 import type { NoteTemplate } from '../domain/noteTemplate';
 import { syncNormalizedEditorMarkdown as syncNormalizedMarkdownFromEditor } from './editorMarkdownSync';
+import { installMdxEditorFloatingUiFixes, isMdxEditorFloatingUiElement } from './editorFloatingUi';
 import {
   captureTaskSelectionSnapshot,
   restoreTaskSelectionSnapshot,
@@ -95,6 +97,8 @@ export function EditorPane({
     const timeoutId = window.setTimeout(() => setCopyStatus('idle'), 2200);
     return () => window.clearTimeout(timeoutId);
   }, [copyStatus]);
+
+  useEffect(() => installMdxEditorFloatingUiFixes(), []);
 
   useEffect(() => {
     if (!note) {
@@ -389,7 +393,11 @@ export function EditorPane({
     onMarkdownChange(normalizeSupportedMarkdown(nextMarkdown));
   }
 
-  function handleEditorBlur() {
+  function handleEditorBlur(event: FocusEvent<HTMLElement>) {
+    if (isMdxEditorFloatingUiElement(event.relatedTarget)) {
+      return;
+    }
+
     syncNormalizedEditorMarkdown();
     onFlush();
   }
