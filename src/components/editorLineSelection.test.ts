@@ -23,6 +23,28 @@ describe('editor line selection', () => {
       root.remove();
     }
   });
+
+  it('maps editor lines to Markdown lines by position instead of rendered text', () => {
+    const root = document.createElement('div');
+    root.setAttribute('contenteditable', 'true');
+    root.innerHTML = `
+      <ul>
+        <li><span data-lexical-text="true">ccc</span></li>
+        <li><span data-lexical-text="true">ddd</span></li>
+        <li role="checkbox"><span data-lexical-text="true">xxx</span></li>
+      </ul>
+    `;
+    document.body.append(root);
+
+    try {
+      const taskText = root.querySelectorAll('li span[data-lexical-text="true"]')[2]?.firstChild;
+      selectText(taskText);
+
+      expect(getSelectedNoteLineIndex(root, '- ccc\n- ddd\n\n- [ ] xxx')).toBe(3);
+    } finally {
+      root.remove();
+    }
+  });
 });
 
 function selectText(node: ChildNode | null | undefined) {

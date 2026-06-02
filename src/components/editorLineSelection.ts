@@ -155,25 +155,12 @@ function getMarkdownLineIndexForEditorLine(
   root: HTMLElement,
   targetLine: HTMLElement
 ): number {
-  const markdownLines = markdown.split(/\r?\n/);
-  let searchStartIndex = 0;
-
-  for (const editorLine of getNoteLineElements(root)) {
-    const markdownLineIndex = findMatchingMarkdownLineIndex(
-      markdownLines,
-      editorLine,
-      searchStartIndex
-    );
-    if (editorLine === targetLine) {
-      return markdownLineIndex;
-    }
-
-    if (markdownLineIndex >= 0) {
-      searchStartIndex = markdownLineIndex + 1;
-    }
+  const editorLineIndex = getNoteLineElements(root).indexOf(targetLine);
+  if (editorLineIndex < 0) {
+    return -1;
   }
 
-  return -1;
+  return getNonBlankMarkdownLineIndices(markdown)[editorLineIndex] ?? -1;
 }
 
 function getEditorLineElementAtMarkdownLine(
@@ -181,60 +168,19 @@ function getEditorLineElementAtMarkdownLine(
   markdown: string,
   targetLineIndex: number
 ): HTMLElement | null {
-  const markdownLines = markdown.split(/\r?\n/);
-  let searchStartIndex = 0;
-
-  for (const editorLine of getNoteLineElements(root)) {
-    const markdownLineIndex = findMatchingMarkdownLineIndex(
-      markdownLines,
-      editorLine,
-      searchStartIndex
-    );
-    if (markdownLineIndex === targetLineIndex) {
-      return editorLine;
-    }
-
-    if (markdownLineIndex >= 0) {
-      searchStartIndex = markdownLineIndex + 1;
-    }
+  const editorLineIndex = getNonBlankMarkdownLineIndices(markdown).indexOf(targetLineIndex);
+  if (editorLineIndex < 0) {
+    return null;
   }
 
-  return null;
+  return getNoteLineElements(root)[editorLineIndex] ?? null;
 }
 
-function findMatchingMarkdownLineIndex(
-  markdownLines: string[],
-  editorLine: HTMLElement,
-  startIndex: number
-): number {
-  const editorLineText = normalizeEditorLineText(editorLine);
-
-  for (let index = startIndex; index < markdownLines.length; index += 1) {
-    if (normalizeMarkdownLineText(markdownLines[index]) === editorLineText) {
-      return index;
-    }
-  }
-
-  return -1;
-}
-
-function normalizeEditorLineText(editorLine: HTMLElement): string {
-  return normalizeReadableLineText(editorLine.textContent ?? '');
-}
-
-function normalizeMarkdownLineText(line: string): string {
-  return normalizeReadableLineText(
-    line
-      .replace(/^\s{0,3}#{1,6}\s+/, '')
-      .replace(/^\s*[-*]\s+\[(?: |x|X)\]\s+/, '')
-      .replace(/^\s*[-*]\s+/, '')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
-      .replace(/\*\*([^*]+)\*\*/g, '$1')
-  );
-}
-
-function normalizeReadableLineText(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
+function getNonBlankMarkdownLineIndices(markdown: string): number[] {
+  return markdown
+    .split(/\r?\n/)
+    .map((line, index) => (line.trim() === '' ? -1 : index))
+    .filter((index) => index >= 0);
 }
 
 function focusWithoutScrolling(element: HTMLElement) {
