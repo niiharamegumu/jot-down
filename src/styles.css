@@ -116,14 +116,14 @@ button {
 
 .note-list--collapsed {
   position: fixed;
-  left: 0;
-  width: min(var(--sidebar-width, 360px), calc(100vw - var(--sidebar-card-gap)));
-  max-width: calc(100vw - var(--sidebar-card-gap));
+  left: var(--sidebar-card-gap);
+  width: min(var(--sidebar-width, 360px), calc(100vw - var(--sidebar-card-gap) * 2));
+  max-width: calc(100vw - var(--sidebar-card-gap) * 2);
   margin: 0;
-  border-radius: 0 1.55rem 1.55rem 0;
+  border-radius: 1.55rem;
   opacity: 0;
   pointer-events: none;
-  transform: translateX(-100%);
+  transform: translateX(calc(-100% - var(--sidebar-card-gap)));
   transition:
     opacity 180ms ease,
     transform 220ms ease;
@@ -626,14 +626,14 @@ h2 {
 
 .template-sidebar--collapsed {
   position: fixed;
-  left: 0;
-  width: min(var(--sidebar-width, 360px), calc(100vw - var(--sidebar-card-gap)));
-  max-width: calc(100vw - var(--sidebar-card-gap));
+  left: var(--sidebar-card-gap);
+  width: min(var(--sidebar-width, 360px), calc(100vw - var(--sidebar-card-gap) * 2));
+  max-width: calc(100vw - var(--sidebar-card-gap) * 2);
   margin: 0;
-  border-radius: 0 1.55rem 1.55rem 0;
+  border-radius: 1.55rem;
   opacity: 0;
   pointer-events: none;
-  transform: translateX(-100%);
+  transform: translateX(calc(-100% - var(--sidebar-card-gap)));
   transition:
     opacity 180ms ease,
     transform 220ms ease;
