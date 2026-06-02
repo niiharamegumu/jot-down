@@ -14,12 +14,22 @@ import {
   useState,
   type ClipboardEvent,
   type FocusEvent,
-  type KeyboardEvent,
   type MouseEvent as ReactMouseEvent
 } from 'react';
 import type { Note } from '../domain/note';
-import { normalizeSupportedMarkdown, toggleTaskAtIndex } from '../domain/note';
+import {
+  getNoteLineMovementTargetIndex,
+  moveNoteLine,
+  normalizeSupportedMarkdown,
+  toggleTaskAtIndex
+} from '../domain/note';
 import type { NoteTemplate } from '../domain/noteTemplate';
+import {
+  captureNoteLineSelectionSnapshot,
+  getSelectedNoteLineIndex,
+  restoreNoteLineSelectionSnapshot,
+  type NoteLineSelectionSnapshot
+} from './editorLineSelection';
 import { syncNormalizedEditorMarkdown as syncNormalizedMarkdownFromEditor } from './editorMarkdownSync';
 import { installMdxEditorFloatingUiFixes, isMdxEditorFloatingUiElement } from './editorFloatingUi';
 import {
@@ -82,6 +92,7 @@ export function EditorPane({
   const editorShellRef = useRef<HTMLElement>(null);
   const previousNoteIdRef = useRef<string | null>(null);
   const currentNoteIdRef = useRef<string | null>(null);
+  const pendingLineMoveMarkdownRef = useRef<string | null>(null);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
@@ -102,11 +113,27 @@ export function EditorPane({
 
   useEffect(() => {
     if (!note) {
+      return;
+    }
+
+    const editorShell = editorShellRef.current;
+    if (!editorShell) {
+      return;
+    }
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => handleEditorShortcut(event);
+    editorShell.addEventListener('keydown', handleKeyDown, true);
+    return () => editorShell.removeEventListener('keydown', handleKeyDown, true);
+  });
+
+  useEffect(() => {
+    if (!note) {
       previousNoteIdRef.current = null;
       return;
     }
 
     if (previousNoteIdRef.current !== note.id) {
+      pendingLineMoveMarkdownRef.current = null;
       editorRef.current?.setMarkdown(markdown);
       previousNoteIdRef.current = note.id;
       window.requestAnimationFrame(() =>
@@ -142,6 +169,31 @@ export function EditorPane({
         <p className="editor-toolbar__updated-at">
           {updatedAt ? updatedAtFormatter.format(new Date(updatedAt)) : ''}
         </p>
+        <button
+          className="icon-button shortcut-help-button"
+          type="button"
+          aria-label="ショートカット一覧"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M9.5 9a2.6 2.6 0 0 1 5 1c0 1.7-1.8 2-2.4 3.2" />
+            <path d="M12 17h.01" />
+          </svg>
+          <span className="shortcut-help-button__tooltip" role="tooltip">
+            <span>
+              <kbd>⌘ + Enter</kbd>
+              <span>タスクのチェックを切り替え</span>
+            </span>
+            <span>
+              <kbd>⌥ + ↑</kbd>
+              <span>行を上へ移動</span>
+            </span>
+            <span>
+              <kbd>⌥ + ↓</kbd>
+              <span>行を下へ移動</span>
+            </span>
+          </span>
+        </button>
         <button
           className="icon-button copy-markdown-button"
           type="button"
@@ -247,7 +299,6 @@ export function EditorPane({
         className="editor-shell"
         onBlurCapture={handleEditorBlur}
         onClickCapture={handleTaskClick}
-        onKeyDownCapture={handleTaskShortcut}
         onPasteCapture={handleEditorPaste}
       >
         <MDXEditor
@@ -331,18 +382,29 @@ export function EditorPane({
     }
   }
 
-  function handleTaskShortcut(event: KeyboardEvent<HTMLElement>) {
-    if (!event.metaKey || event.key !== 'Enter') {
+  function handleEditorShortcut(event: globalThis.KeyboardEvent) {
+    if (!event.metaKey && event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      moveSelectedNoteLine(event, event.key === 'ArrowUp' ? 'up' : 'down');
       return;
     }
 
-    const checkbox = getSelectedTaskCheckbox(event.currentTarget, event.target);
+    if (!event.metaKey || event.altKey || event.key !== 'Enter') {
+      return;
+    }
+
+    const editorShell = editorShellRef.current;
+    if (!editorShell) {
+      return;
+    }
+
+    const checkbox = getSelectedTaskCheckbox(editorShell, event.target);
     if (!checkbox) {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
+    event.stopImmediatePropagation();
 
     const taskIndex = getTaskIndex(checkbox);
     if (taskIndex >= 0) {
@@ -389,7 +451,57 @@ export function EditorPane({
     }
   }
 
+  function moveSelectedNoteLine(event: globalThis.KeyboardEvent, direction: 'up' | 'down') {
+    const editorRoot = getEditorRoot();
+    if (!editorRoot) {
+      return;
+    }
+
+    const currentMarkdown = markdown;
+    const lineIndex = getSelectedNoteLineIndex(editorRoot, currentMarkdown);
+    if (lineIndex < 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    const targetLineIndex = getNoteLineMovementTargetIndex(currentMarkdown, lineIndex, direction);
+    if (targetLineIndex < 0) {
+      return;
+    }
+
+    const nextMarkdown = moveNoteLine(currentMarkdown, lineIndex, direction);
+    if (nextMarkdown === currentMarkdown) {
+      return;
+    }
+
+    const selectionSnapshot = captureNoteLineSelectionSnapshot(
+      activeNoteId,
+      targetLineIndex,
+      editorRoot,
+      nextMarkdown
+    );
+    pendingLineMoveMarkdownRef.current = nextMarkdown;
+    editorRef.current?.setMarkdown(nextMarkdown);
+    onMarkdownChange(nextMarkdown);
+
+    if (selectionSnapshot) {
+      window.requestAnimationFrame(() => restoreNoteLineSelection(selectionSnapshot));
+    }
+  }
+
   function handleMarkdownChange(nextMarkdown: string) {
+    const pendingLineMoveMarkdown = pendingLineMoveMarkdownRef.current;
+    if (
+      pendingLineMoveMarkdown &&
+      hasSameLineSequenceIgnoringLeadingIndent(pendingLineMoveMarkdown, nextMarkdown)
+    ) {
+      return;
+    }
+
+    pendingLineMoveMarkdownRef.current = null;
     onMarkdownChange(normalizeSupportedMarkdown(nextMarkdown));
   }
 
@@ -426,6 +538,16 @@ export function EditorPane({
   }
 
   function syncNormalizedEditorMarkdown() {
+    const currentMarkdown = editorRef.current?.getMarkdown() ?? markdown;
+    const pendingLineMoveMarkdown = pendingLineMoveMarkdownRef.current;
+    if (
+      pendingLineMoveMarkdown &&
+      hasSameLineSequenceIgnoringLeadingIndent(pendingLineMoveMarkdown, currentMarkdown)
+    ) {
+      return;
+    }
+
+    pendingLineMoveMarkdownRef.current = null;
     syncNormalizedMarkdownFromEditor(
       editorRef.current,
       markdown,
@@ -460,6 +582,19 @@ export function EditorPane({
       snapshot,
       () => currentNoteIdRef.current,
       checkbox instanceof HTMLElement ? checkbox : null
+    );
+  }
+
+  function restoreNoteLineSelection(snapshot: NoteLineSelectionSnapshot) {
+    restoreNoteLineSelectionSnapshot(snapshot, () => currentNoteIdRef.current, getEditorRoot());
+  }
+
+  function hasSameLineSequenceIgnoringLeadingIndent(left: string, right: string): boolean {
+    const leftLines = left.split(/\r?\n/);
+    const rightLines = right.split(/\r?\n/);
+    return (
+      leftLines.length === rightLines.length &&
+      leftLines.every((line, index) => line.trimStart() === rightLines[index].trimStart())
     );
   }
 }

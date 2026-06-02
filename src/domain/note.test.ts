@@ -3,7 +3,9 @@ import {
   deriveNoteSnippet,
   deriveNoteTitle,
   duplicateNote,
+  getNoteLineMovementTargetIndex,
   matchesNoteSearch,
+  moveNoteLine,
   normalizeSupportedMarkdown,
   sortNotesByUpdatedTime,
   toggleTaskAtIndex,
@@ -128,6 +130,45 @@ describe('Task toggling', () => {
 
   it('leaves note text unchanged when no task exists at that index', () => {
     expect(toggleTaskAtIndex('- [ ] only task', 2)).toBe('- [ ] only task');
+  });
+});
+
+describe('Note line movement', () => {
+  it('moves the selected note line up or down', () => {
+    expect(moveNoteLine('A\nB\nC', 1, 'up')).toBe('B\nA\nC');
+    expect(moveNoteLine('A\nB\nC', 1, 'down')).toBe('A\nC\nB');
+  });
+
+  it('leaves note text unchanged at movement boundaries', () => {
+    expect(moveNoteLine('A\nB', 0, 'up')).toBe('A\nB');
+    expect(moveNoteLine('A\nB', 1, 'down')).toBe('A\nB');
+    expect(moveNoteLine('A\nB', 4, 'down')).toBe('A\nB');
+  });
+
+  it('carries task checked state with the moved note line', () => {
+    expect(moveNoteLine('- [ ] 買い物\n- [x] メール返信', 1, 'up')).toBe(
+      '- [x] メール返信\n- [ ] 買い物'
+    );
+  });
+
+  it('skips blank note lines when moving non-empty note lines', () => {
+    expect(moveNoteLine('A\n\nB', 2, 'up')).toBe('B\n\nA');
+    expect(moveNoteLine('A\n\nB', 0, 'down')).toBe('B\n\nA');
+  });
+
+  it('returns the non-blank target line index for note line movement', () => {
+    expect(getNoteLineMovementTargetIndex('A\n\nB', 2, 'up')).toBe(0);
+    expect(getNoteLineMovementTargetIndex('A\n\nB', 0, 'down')).toBe(2);
+    expect(getNoteLineMovementTargetIndex('A\n\nB', 1, 'down')).toBe(-1);
+  });
+
+  it('leaves blank note lines unchanged when they are selected', () => {
+    expect(moveNoteLine('A\n\nB', 1, 'down')).toBe('A\n\nB');
+  });
+
+  it('moves indented list items without changing indentation', () => {
+    expect(moveNoteLine('- 親A\n  - 子A1\n- 親B', 2, 'up')).toBe('- 親A\n- 親B\n  - 子A1');
+    expect(moveNoteLine('- 親A\n  - 子A1', 1, 'up')).toBe('  - 子A1\n- 親A');
   });
 });
 

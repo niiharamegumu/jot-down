@@ -201,7 +201,7 @@ button {
 
 .editor-toolbar {
   display: grid;
-  grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem 2.5rem 2.5rem 2.5rem;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem 2.5rem 2.5rem 2.5rem 2.5rem;
   align-items: center;
   column-gap: 0.4rem;
   min-height: 3.4rem;
@@ -252,18 +252,23 @@ h2 {
 }
 
 .delete-button {
-  grid-column: 6;
+  grid-column: 7;
   justify-self: end;
   color: var(--danger);
 }
 
-.copy-markdown-button {
+.shortcut-help-button {
   grid-column: 3;
   justify-self: end;
 }
 
-.duplicate-button {
+.copy-markdown-button {
   grid-column: 4;
+  justify-self: end;
+}
+
+.duplicate-button {
+  grid-column: 5;
   justify-self: end;
 }
 
@@ -359,6 +364,52 @@ h2 {
   transform: none;
 }
 
+.shortcut-help-button {
+  color: var(--text);
+}
+
+.shortcut-help-button__tooltip {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  display: grid;
+  width: max-content;
+  max-width: min(22rem, calc(100vw - 2rem));
+  gap: 0.45rem;
+  border-radius: 0.45rem;
+  padding: 0.65rem;
+  color: var(--selected-text);
+  background: var(--accent);
+  box-shadow: var(--icon-shadow);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.3;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.shortcut-help-button__tooltip > span {
+  display: grid;
+  grid-template-columns: 6.4rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.7rem;
+  text-align: left;
+}
+
+.shortcut-help-button__tooltip kbd {
+  border-radius: 0.28rem;
+  padding: 0.12rem 0.28rem;
+  background: rgb(255 255 255 / 18%);
+  font: inherit;
+  white-space: nowrap;
+}
+
+.shortcut-help-button:hover .shortcut-help-button__tooltip,
+.shortcut-help-button:focus-visible .shortcut-help-button__tooltip {
+  opacity: 1;
+}
+
 .icon-button[data-tooltip]:hover::after,
 .delete-button[data-tooltip]:hover::after,
 .back-button[data-tooltip]:hover::after,
@@ -382,7 +433,7 @@ h2 {
 
 .template-insert {
   position: relative;
-  grid-column: 5;
+  grid-column: 6;
   justify-self: end;
   width: 2.25rem;
 }

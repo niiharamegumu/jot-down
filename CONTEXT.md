@@ -28,6 +28,14 @@ _Avoid_: Separate preview, rendered-only document, edit/preview mode, layout-shi
 The user-facing unit of writing. A user can have multiple notes, and each note contains Markdown text, including any tasks written inside it.
 _Avoid_: Document, page, list
 
+**Note line**:
+A single Markdown line inside a note's text, treated as one movable writing unit even when it wraps visually in the editor. A task is a note line whose checked state is part of that line's Markdown text.
+_Avoid_: Visual row, task object, block record
+
+**Note line movement**:
+A keyboard-driven note edit that moves the current non-empty note line earlier or later within the same note text while skipping blank lines as spacing. Moving a line only changes its position; indentation, parent-child-looking Markdown, and task checked state remain part of the moved line's Markdown text.
+_Avoid_: Drag sorting, task sorting, toolbar reorder action, moving a task object
+
 **Note deletion**:
 A confirmed action that removes a note from the local note store without creating a separate recoverable place for it. Empty notes remain until explicitly deleted, deletion confirmation must make the lack of recovery clear, and deleting the active note should leave another note ready for writing.
 _Avoid_: Trash, archive
@@ -123,6 +131,12 @@ Domain expert: "No. The user is writing notes; document and page are implementat
 
 Developer: "Where does a note title come from?"
 Domain expert: "From the note text. If the user wants to rename a note, they edit the note content."
+
+Developer: "If a task line wraps onto two visual rows, can the wrapped part be moved separately?"
+Domain expert: "No. A note line is one Markdown line, so the whole line moves together."
+
+Developer: "When a checked task line is moved, is the task's checked state reattached somewhere else?"
+Domain expert: "No. The checked marker moves with the note line because it is part of that line's Markdown text."
 
 Developer: "When a note is duplicated, should the app add '(copy)' to the heading?"
 Domain expert: "No. Note duplication creates another note with the same Markdown text. Changing the heading would change the duplicated note content."
