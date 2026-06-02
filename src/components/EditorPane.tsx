@@ -477,6 +477,17 @@ export function EditorPane({
 
     const nextMarkdown = moveNoteLine(currentMarkdown, lineIndex, direction);
     if (nextMarkdown === currentMarkdown) {
+      const selectionSnapshot = captureNoteLineSelectionSnapshot(
+        activeNoteId,
+        targetLineIndex,
+        editorRoot,
+        nextMarkdown
+      );
+
+      if (selectionSnapshot) {
+        window.requestAnimationFrame(() => restoreNoteLineSelection(selectionSnapshot));
+      }
+
       return;
     }
 

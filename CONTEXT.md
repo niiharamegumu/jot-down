@@ -29,11 +29,11 @@ The user-facing unit of writing. A user can have multiple notes, and each note c
 _Avoid_: Document, page, list
 
 **Note line**:
-A single Markdown line inside a note's text, treated as one movable writing unit even when it wraps visually in the editor. A task is a note line whose checked state is part of that line's Markdown text.
+A single Markdown line inside a note's text, treated as one selectable writing unit even when it wraps visually in the editor. A task is a note line whose checked state is part of that line's Markdown text. When a list item has indented continuation lines, those continuation lines remain attached to the list item during note line movement.
 _Avoid_: Visual row, task object, block record
 
 **Note line movement**:
-A keyboard-driven note edit that moves the current non-empty note line earlier or later within the same note text while skipping blank lines as spacing. Moving a line only changes its position; indentation, parent-child-looking Markdown, and task checked state remain part of the moved line's Markdown text.
+A keyboard-driven note edit that moves the current non-empty note line earlier or later within the same note text while skipping blank lines as spacing. Moving a list item also moves its indented continuation lines, such as a following Markdown link line, as the same writing unit. Moving a line only changes its position; indentation, parent-child-looking Markdown, and task checked state remain part of the moved Markdown text.
 _Avoid_: Drag sorting, task sorting, toolbar reorder action, moving a task object
 
 **Note deletion**:
@@ -133,7 +133,7 @@ Developer: "Where does a note title come from?"
 Domain expert: "From the note text. If the user wants to rename a note, they edit the note content."
 
 Developer: "If a task line wraps onto two visual rows, can the wrapped part be moved separately?"
-Domain expert: "No. A note line is one Markdown line, so the whole line moves together."
+Domain expert: "No. A note line is one Markdown line, so the whole line moves together. If the task has indented continuation lines, those lines move with that list item."
 
 Developer: "When a checked task line is moved, is the task's checked state reattached somewhere else?"
 Domain expert: "No. The checked marker moves with the note line because it is part of that line's Markdown text."

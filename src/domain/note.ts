@@ -10,6 +10,12 @@ const headingPattern = /^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/;
 const markdownLinkPattern = /\[[^\]]+\]\([^)]+\)/g;
 const plainWebUrlPattern = /https?:\/\/[A-Za-z0-9\-._~:/?#@!$&'*+,;=%]+/g;
 const trailingUrlPunctuationPattern = /[.,!?;:]+$/;
+const listItemPattern = /^(\s*)([-*])\s+(?:\[(?: |x|X)\]\s+)?/;
+
+type MovableNoteBlock = {
+  start: number;
+  end: number;
+};
 
 export function createNote(markdown = '', id: string = crypto.randomUUID()): Note {
   return {
@@ -107,15 +113,33 @@ export function moveNoteLine(
   direction: 'up' | 'down'
 ): string {
   const lines = markdown.split(/\r?\n/);
-  const targetIndex = getNoteLineMovementTargetIndex(markdown, lineIndex, direction);
-  if (targetIndex < 0) {
+  const blocks = getMovableNoteBlocks(lines);
+  const currentBlockIndex = getMovableNoteBlockIndex(blocks, lineIndex);
+  const targetBlockIndex =
+    currentBlockIndex < 0 ? -1 : currentBlockIndex + (direction === 'up' ? -1 : 1);
+
+  if (targetBlockIndex < 0 || targetBlockIndex >= blocks.length) {
     return markdown;
   }
 
-  const nextLines = [...lines];
-  const movingLine = nextLines[lineIndex];
-  nextLines[lineIndex] = nextLines[targetIndex];
-  nextLines[targetIndex] = movingLine;
+  const currentBlock = blocks[currentBlockIndex];
+  const targetBlock = blocks[targetBlockIndex];
+  const nextLines =
+    direction === 'up'
+      ? [
+          ...lines.slice(0, targetBlock.start),
+          ...lines.slice(currentBlock.start, currentBlock.end),
+          ...lines.slice(targetBlock.end, currentBlock.start),
+          ...lines.slice(targetBlock.start, targetBlock.end),
+          ...lines.slice(currentBlock.end)
+        ]
+      : [
+          ...lines.slice(0, currentBlock.start),
+          ...lines.slice(targetBlock.start, targetBlock.end),
+          ...lines.slice(currentBlock.end, targetBlock.start),
+          ...lines.slice(currentBlock.start, currentBlock.end),
+          ...lines.slice(targetBlock.end)
+        ];
 
   return nextLines.join('\n');
 }
@@ -126,12 +150,24 @@ export function getNoteLineMovementTargetIndex(
   direction: 'up' | 'down'
 ): number {
   const lines = markdown.split(/\r?\n/);
+  const blocks = getMovableNoteBlocks(lines);
+  const currentBlockIndex = getMovableNoteBlockIndex(blocks, lineIndex);
+  const targetBlockIndex =
+    currentBlockIndex < 0 ? -1 : currentBlockIndex + (direction === 'up' ? -1 : 1);
 
-  if (lineIndex < 0 || lineIndex >= lines.length || isBlankNoteLine(lines[lineIndex])) {
+  if (targetBlockIndex < 0 || targetBlockIndex >= blocks.length) {
     return -1;
   }
 
-  return findMovableNoteLineTargetIndex(lines, lineIndex, direction);
+  const currentBlock = blocks[currentBlockIndex];
+  const targetBlock = blocks[targetBlockIndex];
+  const lineOffsetInBlock = lineIndex - currentBlock.start;
+
+  if (direction === 'up') {
+    return targetBlock.start + lineOffsetInBlock;
+  }
+
+  return lineIndex + targetBlock.end - currentBlock.end;
 }
 
 function stripMarkdownChrome(value: string): string {
@@ -176,19 +212,50 @@ function isAngleBracketAutolink(line: string, offset: number, rawUrl: string): b
   return line[offset - 1] === '<' && line[offset + rawUrl.length] === '>';
 }
 
-function findMovableNoteLineTargetIndex(
-  lines: string[],
-  lineIndex: number,
-  direction: 'up' | 'down'
-): number {
-  const step = direction === 'up' ? -1 : 1;
-  for (let index = lineIndex + step; index >= 0 && index < lines.length; index += step) {
-    if (!isBlankNoteLine(lines[index])) {
-      return index;
+function getMovableNoteBlocks(lines: string[]): MovableNoteBlock[] {
+  const blocks: MovableNoteBlock[] = [];
+  let lineIndex = 0;
+
+  while (lineIndex < lines.length) {
+    if (isBlankNoteLine(lines[lineIndex])) {
+      lineIndex += 1;
+      continue;
     }
+
+    const start = lineIndex;
+    const listItem = lines[lineIndex].match(listItemPattern);
+    lineIndex += 1;
+
+    if (listItem) {
+      const listItemIndent = listItem[1].length;
+      while (
+        lineIndex < lines.length &&
+        isListItemContinuationLine(lines[lineIndex], listItemIndent)
+      ) {
+        lineIndex += 1;
+      }
+    }
+
+    blocks.push({ start, end: lineIndex });
   }
 
-  return -1;
+  return blocks;
+}
+
+function getMovableNoteBlockIndex(blocks: MovableNoteBlock[], lineIndex: number): number {
+  return blocks.findIndex((block) => lineIndex >= block.start && lineIndex < block.end);
+}
+
+function isListItemContinuationLine(line: string, listItemIndent: number): boolean {
+  if (isBlankNoteLine(line) || listItemPattern.test(line)) {
+    return false;
+  }
+
+  return getIndentLength(line) > listItemIndent;
+}
+
+function getIndentLength(line: string): number {
+  return line.match(/^\s*/)?.[0].length ?? 0;
 }
 
 function isBlankNoteLine(line: string): boolean {
