@@ -151,6 +151,15 @@ describe('Note line movement', () => {
     );
   });
 
+  it('moves the selected line past another line with the same Markdown text', () => {
+    expect(moveNoteLine('- [ ] aaa\n- [ ] ccc\n- [ ] ccc\n- [ ] ddd', 1, 'down')).toBe(
+      '- [ ] aaa\n- [ ] ccc\n- [ ] ccc\n- [ ] ddd'
+    );
+    expect(
+      getNoteLineMovementTargetIndex('- [ ] aaa\n- [ ] ccc\n- [ ] ccc\n- [ ] ddd', 2, 'down')
+    ).toBe(3);
+  });
+
   it('skips blank note lines when moving non-empty note lines', () => {
     expect(moveNoteLine('A\n\nB', 2, 'up')).toBe('B\n\nA');
     expect(moveNoteLine('A\n\nB', 0, 'down')).toBe('B\n\nA');
@@ -169,6 +178,24 @@ describe('Note line movement', () => {
   it('moves indented list items without changing indentation', () => {
     expect(moveNoteLine('- 親A\n  - 子A1\n- 親B', 2, 'up')).toBe('- 親A\n- 親B\n  - 子A1');
     expect(moveNoteLine('- 親A\n  - 子A1', 1, 'up')).toBe('  - 子A1\n- 親A');
+  });
+
+  it('moves a list item together with its indented continuation lines', () => {
+    const markdown =
+      '- [ ] aaa\n  [https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature](https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature)\n- [ ] bbb\n  [https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature](https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature)';
+
+    expect(moveNoteLine(markdown, 0, 'down')).toBe(
+      '- [ ] bbb\n  [https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature](https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature)\n- [ ] aaa\n  [https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature](https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature)'
+    );
+  });
+
+  it('moves the containing list item when a continuation line is selected', () => {
+    const markdown = '- [ ] aaa\n  https://example.com/a\n- [ ] bbb\n  https://example.com/b';
+
+    expect(moveNoteLine(markdown, 1, 'down')).toBe(
+      '- [ ] bbb\n  https://example.com/b\n- [ ] aaa\n  https://example.com/a'
+    );
+    expect(getNoteLineMovementTargetIndex(markdown, 1, 'down')).toBe(3);
   });
 });
 

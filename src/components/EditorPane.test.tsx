@@ -432,6 +432,55 @@ describe('EditorPane', () => {
     expect(onMarkdownChange).toHaveBeenCalledWith('- ccc\n- [ ] xxx\n\n- ddd');
   });
 
+  it('keeps moving the cursor when the selected line swaps with the same Markdown text', () => {
+    const animationFrameCallbacks: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      animationFrameCallbacks.push(callback);
+      return 1;
+    });
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '- [ ] aaa\n- [ ] ccc\n- [ ] ccc\n- [ ] ddd' });
+    animationFrameCallbacks.length = 0;
+
+    selectText(screen.getAllByText('ccc')[0].firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowDown',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).not.toHaveBeenCalled();
+    const restoreCursor = animationFrameCallbacks.at(-1);
+    if (!restoreCursor) {
+      throw new Error('Expected cursor restoration to be scheduled');
+    }
+
+    restoreCursor(0);
+
+    const secondCccText = screen.getAllByText('ccc')[1].firstChild;
+    const selection = window.getSelection();
+    const range = selection?.getRangeAt(0);
+    expect(range?.startContainer).toBe(secondCccText);
+  });
+
+  it('moves a list item with its continuation line', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({
+      onMarkdownChange,
+      markdown:
+        '- [ ] aaa\n  [https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature](https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature)\n- [ ] bbb\n  [https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature](https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature)'
+    });
+
+    selectText(screen.getByText('aaa').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowDown',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith(
+      '- [ ] bbb\n  [https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature](https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature)\n- [ ] aaa\n  [https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature](https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature)'
+    );
+  });
+
   it('does not accept checklist normalization when loading a note', () => {
     const onMarkdownChange = vi.fn();
     mockSetMarkdownSideEffect = () => '- [ ] ccc\n- [ ] ddd\n- [ ] xxx';

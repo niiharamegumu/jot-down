@@ -20,6 +20,7 @@ type ScrollPositionSnapshot = {
 };
 
 const editorLineSelector = 'h1,h2,h3,h4,h5,h6,p,li';
+const markdownListItemPattern = /^(\s*)([-*])\s+(?:\[(?: |x|X)\]\s+)?/;
 
 export function getSelectedNoteLineIndex(root: HTMLElement, markdown: string): number {
   const selectedLine = getSelectedNoteLineElement(root);
@@ -160,7 +161,7 @@ function getMarkdownLineIndexForEditorLine(
     return -1;
   }
 
-  return getNonBlankMarkdownLineIndices(markdown)[editorLineIndex] ?? -1;
+  return getEditorRepresentedMarkdownLineIndices(markdown)[editorLineIndex] ?? -1;
 }
 
 function getEditorLineElementAtMarkdownLine(
@@ -168,7 +169,7 @@ function getEditorLineElementAtMarkdownLine(
   markdown: string,
   targetLineIndex: number
 ): HTMLElement | null {
-  const editorLineIndex = getNonBlankMarkdownLineIndices(markdown).indexOf(targetLineIndex);
+  const editorLineIndex = getEditorRepresentedMarkdownLineIndex(markdown, targetLineIndex);
   if (editorLineIndex < 0) {
     return null;
   }
@@ -176,11 +177,65 @@ function getEditorLineElementAtMarkdownLine(
   return getNoteLineElements(root)[editorLineIndex] ?? null;
 }
 
-function getNonBlankMarkdownLineIndices(markdown: string): number[] {
-  return markdown
-    .split(/\r?\n/)
-    .map((line, index) => (line.trim() === '' ? -1 : index))
-    .filter((index) => index >= 0);
+function getEditorRepresentedMarkdownLineIndex(markdown: string, targetLineIndex: number): number {
+  const lineIndices = getEditorRepresentedMarkdownLineIndices(markdown);
+  const exactIndex = lineIndices.indexOf(targetLineIndex);
+  if (exactIndex >= 0) {
+    return exactIndex;
+  }
+
+  for (let index = lineIndices.length - 1; index >= 0; index -= 1) {
+    if (lineIndices[index] < targetLineIndex) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function getEditorRepresentedMarkdownLineIndices(markdown: string): number[] {
+  const lines = markdown.split(/\r?\n/);
+  const lineIndices: number[] = [];
+  let lineIndex = 0;
+
+  while (lineIndex < lines.length) {
+    if (isBlankMarkdownLine(lines[lineIndex])) {
+      lineIndex += 1;
+      continue;
+    }
+
+    const listItem = lines[lineIndex].match(markdownListItemPattern);
+    lineIndices.push(lineIndex);
+    lineIndex += 1;
+
+    if (listItem) {
+      const listItemIndent = listItem[1].length;
+      while (
+        lineIndex < lines.length &&
+        isMarkdownListItemContinuationLine(lines[lineIndex], listItemIndent)
+      ) {
+        lineIndex += 1;
+      }
+    }
+  }
+
+  return lineIndices;
+}
+
+function isMarkdownListItemContinuationLine(line: string, listItemIndent: number): boolean {
+  if (isBlankMarkdownLine(line) || markdownListItemPattern.test(line)) {
+    return false;
+  }
+
+  return getMarkdownLineIndentLength(line) > listItemIndent;
+}
+
+function getMarkdownLineIndentLength(line: string): number {
+  return line.match(/^\s*/)?.[0].length ?? 0;
+}
+
+function isBlankMarkdownLine(line: string): boolean {
+  return line.trim() === '';
 }
 
 function focusWithoutScrolling(element: HTMLElement) {
