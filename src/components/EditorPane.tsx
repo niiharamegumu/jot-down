@@ -30,6 +30,10 @@ import {
   restoreNoteLineSelectionSnapshot,
   type NoteLineSelectionSnapshot
 } from './editorLineSelection';
+import {
+  addEditorOnlyListBoundaries,
+  removeEditorOnlyListBoundaries
+} from './editorMarkdownBoundaries';
 import { syncNormalizedEditorMarkdown as syncNormalizedMarkdownFromEditor } from './editorMarkdownSync';
 import { installMdxEditorFloatingUiFixes, isMdxEditorFloatingUiElement } from './editorFloatingUi';
 import {
@@ -92,7 +96,7 @@ export function EditorPane({
   const editorShellRef = useRef<HTMLElement>(null);
   const previousNoteIdRef = useRef<string | null>(null);
   const currentNoteIdRef = useRef<string | null>(null);
-  const pendingLineMoveMarkdownRef = useRef<string | null>(null);
+  const pendingProgrammaticMarkdownRef = useRef<string | null>(null);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
@@ -133,8 +137,8 @@ export function EditorPane({
     }
 
     if (previousNoteIdRef.current !== note.id) {
-      pendingLineMoveMarkdownRef.current = null;
-      editorRef.current?.setMarkdown(markdown);
+      pendingProgrammaticMarkdownRef.current = markdown;
+      editorRef.current?.setMarkdown(toEditorMarkdown(markdown));
       previousNoteIdRef.current = note.id;
       window.requestAnimationFrame(() =>
         editorRef.current?.focus(undefined, { defaultSelection: 'rootStart' })
@@ -303,7 +307,7 @@ export function EditorPane({
       >
         <MDXEditor
           ref={editorRef}
-          markdown={markdown}
+          markdown={toEditorMarkdown(markdown)}
           onChange={handleMarkdownChange}
           plugins={editorPlugins}
           contentEditableClassName="jot-editor"
@@ -443,8 +447,7 @@ export function EditorPane({
 
   function toggleTask(taskIndex: number, selectionSnapshot: TaskSelectionSnapshot | null = null) {
     const nextMarkdown = normalizeSupportedMarkdown(toggleTaskAtIndex(markdown, taskIndex));
-    editorRef.current?.setMarkdown(nextMarkdown);
-    onMarkdownChange(nextMarkdown);
+    applyProgrammaticMarkdownChange(nextMarkdown);
 
     if (selectionSnapshot) {
       window.requestAnimationFrame(() => restoreTaskSelection(selectionSnapshot));
@@ -483,9 +486,7 @@ export function EditorPane({
       editorRoot,
       nextMarkdown
     );
-    pendingLineMoveMarkdownRef.current = nextMarkdown;
-    editorRef.current?.setMarkdown(nextMarkdown);
-    onMarkdownChange(nextMarkdown);
+    applyProgrammaticMarkdownChange(nextMarkdown);
 
     if (selectionSnapshot) {
       window.requestAnimationFrame(() => restoreNoteLineSelection(selectionSnapshot));
@@ -493,16 +494,20 @@ export function EditorPane({
   }
 
   function handleMarkdownChange(nextMarkdown: string) {
-    const pendingLineMoveMarkdown = pendingLineMoveMarkdownRef.current;
+    const appMarkdown = fromEditorMarkdown(nextMarkdown);
     if (
-      pendingLineMoveMarkdown &&
-      hasSameLineSequenceIgnoringLeadingIndent(pendingLineMoveMarkdown, nextMarkdown)
+      shouldIgnorePendingProgrammaticMarkdown(appMarkdown) ||
+      isEditorListNormalization(markdown, appMarkdown)
     ) {
       return;
     }
 
-    pendingLineMoveMarkdownRef.current = null;
-    onMarkdownChange(normalizeSupportedMarkdown(nextMarkdown));
+    if (appMarkdown === markdown) {
+      pendingProgrammaticMarkdownRef.current = null;
+      return;
+    }
+
+    onMarkdownChange(normalizeSupportedMarkdown(appMarkdown));
   }
 
   function handleEditorBlur(event: FocusEvent<HTMLElement>) {
@@ -522,14 +527,17 @@ export function EditorPane({
       const normalizedPastedText = normalizeSupportedMarkdown(pastedText);
 
       if (markdown.trim() === '') {
-        editorRef.current?.setMarkdown(normalizedPastedText);
-        onMarkdownChange(normalizedPastedText);
+        applyProgrammaticMarkdownChange(normalizedPastedText);
         return;
       }
 
       editorRef.current?.focus(() => {
         editorRef.current?.insertMarkdown(normalizedPastedText);
-        onMarkdownChange(normalizeSupportedMarkdown(editorRef.current?.getMarkdown() ?? markdown));
+        onMarkdownChange(
+          normalizeSupportedMarkdown(
+            fromEditorMarkdown(editorRef.current?.getMarkdown() ?? markdown)
+          )
+        );
       });
       return;
     }
@@ -538,28 +546,31 @@ export function EditorPane({
   }
 
   function syncNormalizedEditorMarkdown() {
-    const currentMarkdown = editorRef.current?.getMarkdown() ?? markdown;
-    const pendingLineMoveMarkdown = pendingLineMoveMarkdownRef.current;
+    const currentMarkdown = fromEditorMarkdown(editorRef.current?.getMarkdown() ?? markdown);
     if (
-      pendingLineMoveMarkdown &&
-      hasSameLineSequenceIgnoringLeadingIndent(pendingLineMoveMarkdown, currentMarkdown)
+      shouldIgnorePendingProgrammaticMarkdown(currentMarkdown) ||
+      isEditorListNormalization(markdown, currentMarkdown)
     ) {
       return;
     }
 
-    pendingLineMoveMarkdownRef.current = null;
-    syncNormalizedMarkdownFromEditor(
-      editorRef.current,
-      markdown,
-      onMarkdownChange,
-      getEditorRoot()
-    );
+    const editorAdapter = editorRef.current
+      ? ({
+          getMarkdown: () => currentMarkdown,
+          setMarkdown: (nextMarkdown: string) =>
+            editorRef.current?.setMarkdown(toEditorMarkdown(nextMarkdown))
+        } as Parameters<typeof syncNormalizedMarkdownFromEditor>[0])
+      : null;
+
+    syncNormalizedMarkdownFromEditor(editorAdapter, markdown, onMarkdownChange, getEditorRoot());
   }
 
   function handleInsertTemplate(templateMarkdown: string) {
     editorRef.current?.focus(() => {
       editorRef.current?.insertMarkdown(templateMarkdown);
-      onMarkdownChange(normalizeSupportedMarkdown(editorRef.current?.getMarkdown() ?? markdown));
+      onMarkdownChange(
+        normalizeSupportedMarkdown(fromEditorMarkdown(editorRef.current?.getMarkdown() ?? markdown))
+      );
     });
     setTemplateMenuOpen(false);
   }
@@ -589,12 +600,83 @@ export function EditorPane({
     restoreNoteLineSelectionSnapshot(snapshot, () => currentNoteIdRef.current, getEditorRoot());
   }
 
-  function hasSameLineSequenceIgnoringLeadingIndent(left: string, right: string): boolean {
-    const leftLines = left.split(/\r?\n/);
-    const rightLines = right.split(/\r?\n/);
+  function applyProgrammaticMarkdownChange(nextMarkdown: string) {
+    pendingProgrammaticMarkdownRef.current = nextMarkdown;
+    editorRef.current?.setMarkdown(toEditorMarkdown(nextMarkdown));
+    onMarkdownChange(nextMarkdown);
+  }
+
+  function shouldIgnorePendingProgrammaticMarkdown(nextMarkdown: string): boolean {
+    const pendingProgrammaticMarkdown = pendingProgrammaticMarkdownRef.current;
+    if (!pendingProgrammaticMarkdown) {
+      return false;
+    }
+
+    if (isEditorListNormalization(pendingProgrammaticMarkdown, nextMarkdown)) {
+      pendingProgrammaticMarkdownRef.current = null;
+      return true;
+    }
+
+    pendingProgrammaticMarkdownRef.current = null;
+    return false;
+  }
+
+  function isEditorListNormalization(sourceMarkdown: string, nextMarkdown: string): boolean {
+    if (
+      nextMarkdown === sourceMarkdown ||
+      !hasSameReadableNoteLines(sourceMarkdown, nextMarkdown)
+    ) {
+      return false;
+    }
+
+    const sourceLines = getNonBlankNoteLines(sourceMarkdown);
+    const nextLines = getNonBlankNoteLines(nextMarkdown);
+    return (
+      sourceLines.length === nextLines.length &&
+      sourceLines.every(isMarkdownListLine) &&
+      nextLines.every(isMarkdownTaskLine)
+    );
+  }
+
+  function hasSameReadableNoteLines(left: string, right: string): boolean {
+    const leftLines = getReadableNoteLines(left);
+    const rightLines = getReadableNoteLines(right);
     return (
       leftLines.length === rightLines.length &&
-      leftLines.every((line, index) => line.trimStart() === rightLines[index].trimStart())
+      leftLines.every((line, index) => line === rightLines[index])
     );
+  }
+
+  function getReadableNoteLines(value: string): string[] {
+    return getNonBlankNoteLines(value).map((line) =>
+      line
+        .replace(/^\s{0,3}#{1,6}\s+/, '')
+        .replace(/^\s*[-*]\s+\[(?: |x|X)\]\s+/, '')
+        .replace(/^\s*[-*]\s+/, '')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/\s+/g, ' ')
+        .trim()
+    );
+  }
+
+  function getNonBlankNoteLines(value: string): string[] {
+    return value.split(/\r?\n/).filter((line) => line.trim() !== '');
+  }
+
+  function isMarkdownListLine(line: string): boolean {
+    return /^\s*[-*]\s+/.test(line);
+  }
+
+  function isMarkdownTaskLine(line: string): boolean {
+    return /^\s*[-*]\s+\[(?: |x|X)\]\s+/.test(line);
+  }
+
+  function toEditorMarkdown(value: string): string {
+    return addEditorOnlyListBoundaries(value);
+  }
+
+  function fromEditorMarkdown(value: string): string {
+    return removeEditorOnlyListBoundaries(value);
   }
 }

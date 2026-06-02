@@ -51,9 +51,18 @@ vi.mock('@mdxeditor/editor', async () => {
               return null;
             }
 
+            if (line.trim() === '<!-- jot-down:list-boundary -->') {
+              return null;
+            }
+
             const task = line.match(/^\s*[-*]\s+\[( |x|X)\]\s+(.+)$/);
 
             if (!task) {
+              const listItem = line.match(/^\s*[-*]\s+(.+)$/);
+              if (listItem) {
+                return <li key={`${line}-${index}`}>{listItem[1]}</li>;
+              }
+
               return <p key={`${line}-${index}`}>{line}</p>;
             }
 
@@ -408,6 +417,57 @@ describe('EditorPane', () => {
     });
 
     expect(onMarkdownChange).toHaveBeenCalledWith('B\n\nA');
+  });
+
+  it('moves a task line after plain list items separated by a blank line', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '- ccc\n- ddd\n\n- [ ] xxx' });
+
+    selectText(screen.getByText('xxx').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowUp',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('- ccc\n- [ ] xxx\n\n- ddd');
+  });
+
+  it('does not accept checklist normalization when loading a note', () => {
+    const onMarkdownChange = vi.fn();
+    mockSetMarkdownSideEffect = () => '- [ ] ccc\n- [ ] ddd\n- [ ] xxx';
+
+    renderEditor({ onMarkdownChange, markdown: '- ccc\n- ddd\n\n- [ ] xxx' });
+
+    expect(onMarkdownChange).not.toHaveBeenCalledWith('- [ ] ccc\n- [ ] ddd\n- [ ] xxx');
+  });
+
+  it('separates task and plain list blocks before importing Markdown into the editor', () => {
+    renderEditor({ markdown: '- [ ] aaa\n- [ ] bbb\n\n- ccc\n- ddd' });
+
+    expect(mockSetMarkdown).toHaveBeenCalledWith(
+      '- [ ] aaa\n- [ ] bbb\n\n<!-- jot-down:list-boundary -->\n- ccc\n- ddd'
+    );
+  });
+
+  it('does not accept checklist normalization for plain list items on blur', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '- ccc\n- ddd\n\n- [ ] xxx' });
+    mockGetMarkdown.mockReturnValue('- [ ] ccc\n- [ ] ddd\n- [ ] xxx');
+
+    fireEvent.blur(screen.getByLabelText('Markdown editor'));
+
+    expect(onMarkdownChange).not.toHaveBeenCalled();
+  });
+
+  it('does not accept checklist normalization from editor change events', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '- [ ] aaa\n- [ ] bbb\n\n- ccc\n- ddd' });
+
+    const editor = screen.getByLabelText('Markdown editor');
+    editor.textContent = '- [ ] aaa\n- [ ] bbb\n- [ ] ccc\n- [ ] ddd';
+    fireEvent.input(editor);
+
+    expect(onMarkdownChange).not.toHaveBeenCalled();
   });
 
   it('keeps the moved Markdown line unchanged when the editor exports a normalized list', () => {
