@@ -488,20 +488,21 @@ export function EditorPane({
     onMarkdownChange(nextMarkdown);
 
     if (selectionSnapshot) {
-      window.requestAnimationFrame(() => restoreNoteLineSelection(selectionSnapshot));
-    }
-  }
-
-  function handleMarkdownChange(nextMarkdown: string) {
-    const pendingLineMoveMarkdown = pendingLineMoveMarkdownRef.current;
-    if (
-      pendingLineMoveMarkdown &&
-      hasSameLineSequenceIgnoringLeadingIndent(pendingLineMoveMarkdown, nextMarkdown)
-    ) {
+      window.requestAnimationFrame(() => {
+        restoreNoteLineSelection(selectionSnapshot);
+        clearPendingLineMoveMarkdown(nextMarkdown);
+      });
       return;
     }
 
-    pendingLineMoveMarkdownRef.current = null;
+    window.requestAnimationFrame(() => clearPendingLineMoveMarkdown(nextMarkdown));
+  }
+
+  function handleMarkdownChange(nextMarkdown: string) {
+    if (pendingLineMoveMarkdownRef.current) {
+      return;
+    }
+
     onMarkdownChange(normalizeSupportedMarkdown(nextMarkdown));
   }
 
@@ -538,16 +539,10 @@ export function EditorPane({
   }
 
   function syncNormalizedEditorMarkdown() {
-    const currentMarkdown = editorRef.current?.getMarkdown() ?? markdown;
-    const pendingLineMoveMarkdown = pendingLineMoveMarkdownRef.current;
-    if (
-      pendingLineMoveMarkdown &&
-      hasSameLineSequenceIgnoringLeadingIndent(pendingLineMoveMarkdown, currentMarkdown)
-    ) {
+    if (pendingLineMoveMarkdownRef.current) {
       return;
     }
 
-    pendingLineMoveMarkdownRef.current = null;
     syncNormalizedMarkdownFromEditor(
       editorRef.current,
       markdown,
@@ -589,12 +584,9 @@ export function EditorPane({
     restoreNoteLineSelectionSnapshot(snapshot, () => currentNoteIdRef.current, getEditorRoot());
   }
 
-  function hasSameLineSequenceIgnoringLeadingIndent(left: string, right: string): boolean {
-    const leftLines = left.split(/\r?\n/);
-    const rightLines = right.split(/\r?\n/);
-    return (
-      leftLines.length === rightLines.length &&
-      leftLines.every((line, index) => line.trimStart() === rightLines[index].trimStart())
-    );
+  function clearPendingLineMoveMarkdown(expectedMarkdown: string) {
+    if (pendingLineMoveMarkdownRef.current === expectedMarkdown) {
+      pendingLineMoveMarkdownRef.current = null;
+    }
   }
 }

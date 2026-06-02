@@ -54,6 +54,11 @@ vi.mock('@mdxeditor/editor', async () => {
             const task = line.match(/^\s*[-*]\s+\[( |x|X)\]\s+(.+)$/);
 
             if (!task) {
+              const listItem = line.match(/^\s*[-*]\s+(.+)$/);
+              if (listItem) {
+                return <li key={`${line}-${index}`}>{listItem[1]}</li>;
+              }
+
               return <p key={`${line}-${index}`}>{line}</p>;
             }
 
@@ -352,6 +357,19 @@ describe('EditorPane', () => {
     expect(onMarkdownChange).toHaveBeenCalledWith('- [x] メール返信\n- [ ] 買い物\n本文');
   });
 
+  it('moves a task note line that contains bracketed text', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '- [ ] xxx\n- [ ] [test]テスト\n本文' });
+
+    selectText(screen.getByText('[test]テスト').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowUp',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] [test]テスト\n- [ ] xxx\n本文');
+  });
+
   it('does not move the selected note line with command option arrow up', () => {
     const onMarkdownChange = vi.fn();
     renderEditor({ onMarkdownChange, markdown: '- [ ] 買い物\n- [x] メール返信\n本文' });
@@ -408,6 +426,22 @@ describe('EditorPane', () => {
     });
 
     expect(onMarkdownChange).toHaveBeenCalledWith('B\n\nA');
+  });
+
+  it('does not accept editor checklist normalization after moving a plain list item', () => {
+    const onMarkdownChange = vi.fn();
+    mockSetMarkdownSideEffect = () => '- [ ] xxx\n- [ ] bbb\n- [ ] aaa';
+    renderEditor({ onMarkdownChange, markdown: '- [ ] xxx\n\n- aaa\n- bbb' });
+    onMarkdownChange.mockClear();
+
+    selectText(screen.getByText('aaa').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowDown',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] xxx\n\n- bbb\n- aaa');
+    expect(onMarkdownChange).not.toHaveBeenCalledWith('- [ ] xxx\n- [ ] bbb\n- [ ] aaa');
   });
 
   it('keeps the moved Markdown line unchanged when the editor exports a normalized list', () => {
