@@ -98,9 +98,11 @@ describe('editor line selection', () => {
         {
           noteId: 'note-1',
           lineIndex: 2,
+          endLineIndex: 2,
           markdown:
             '- [ ] b\n  [https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature](https://guide.michelin.com/jp/ja/tokyo-region/tokyo/restaurant/lature)\n- [ ] a\n  [https://store.shopping.yahoo.co.jp/futureoffice/b-ab-0009.html](https://store.shopping.yahoo.co.jp/futureoffice/b-ab-0009.html)',
           offset: 0,
+          endOffset: 0,
           scrollPositions: []
         },
         () => 'note-1',

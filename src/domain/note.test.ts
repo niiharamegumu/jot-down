@@ -4,8 +4,10 @@ import {
   deriveNoteTitle,
   duplicateNote,
   getNoteLineMovementTargetIndex,
+  getNoteLineMovementTargetRange,
   matchesNoteSearch,
   moveNoteLine,
+  moveNoteLines,
   normalizeSupportedMarkdown,
   sortNotesByUpdatedTime,
   toggleTaskAtIndex,
@@ -196,6 +198,42 @@ describe('Note line movement', () => {
       '- [ ] bbb\n  https://example.com/b\n- [ ] aaa\n  https://example.com/a'
     );
     expect(getNoteLineMovementTargetIndex(markdown, 1, 'down')).toBe(3);
+  });
+
+  it('moves selected note lines together as an ordered group', () => {
+    expect(moveNoteLines('A\nB\nC\nD', { startLineIndex: 1, endLineIndex: 2 }, 'down')).toBe(
+      'A\nD\nB\nC'
+    );
+    expect(moveNoteLines('A\nB\nC\nD', { startLineIndex: 1, endLineIndex: 2 }, 'up')).toBe(
+      'B\nC\nA\nD'
+    );
+  });
+
+  it('leaves selected note lines unchanged when the group cannot move past a boundary', () => {
+    expect(moveNoteLines('A\nB\nC', { startLineIndex: 0, endLineIndex: 1 }, 'up')).toBe('A\nB\nC');
+    expect(moveNoteLines('A\nB\nC', { startLineIndex: 1, endLineIndex: 2 }, 'down')).toBe(
+      'A\nB\nC'
+    );
+  });
+
+  it('moves only non-blank selected note lines when a selection crosses spacing', () => {
+    expect(moveNoteLines('A\nB\n\nC\nD', { startLineIndex: 1, endLineIndex: 3 }, 'down')).toBe(
+      'A\nD\n\nB\nC'
+    );
+  });
+
+  it('expands selected continuation lines to their containing list items', () => {
+    const markdown = '- [ ] aaa\n  https://example.com/a\n- [ ] bbb\n  https://example.com/b\n本文';
+
+    expect(moveNoteLines(markdown, { startLineIndex: 1, endLineIndex: 3 }, 'down')).toBe(
+      '本文\n- [ ] aaa\n  https://example.com/a\n- [ ] bbb\n  https://example.com/b'
+    );
+  });
+
+  it('returns the moved selected note line range', () => {
+    expect(
+      getNoteLineMovementTargetRange('A\nB\nC\nD', { startLineIndex: 1, endLineIndex: 2 }, 'down')
+    ).toEqual({ startLineIndex: 2, endLineIndex: 3 });
   });
 });
 
