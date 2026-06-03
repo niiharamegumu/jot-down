@@ -1,57 +1,105 @@
 # Jot Down
 
-Jot Down is a local-first Markdown note PWA for quickly writing lightweight notes that can include checkable tasks.
+![Jot Down product screenshot](docs/assets/readme-hero.png)
 
-## Product Direction
+Jot Down is a local-first Markdown note PWA for capturing lightweight notes, tasks,
+links, and reusable writing patterns without leaving the editor.
 
-- Local-first and offline-first.
-- No authentication, account, server-side app state, or cross-device sync.
-- One-screen writing experience inspired by Apple Notes.
-- Markdown text is the source of truth.
-- Editing and structured display are integrated in the same surface.
+It keeps Markdown as the source of truth and stores notes in the browser's local
+note store. There is no account system, server-side app state, or cloud sync.
 
-## Initial Scope
+## Features
 
-- Multiple notes stored in the browser's local note store.
-- Autosave without a user-facing save button.
-- Note titles derived from the first Markdown heading, or the first non-empty line.
-- Notes ordered by last Markdown edit time.
-- Note search by case-insensitive partial text matching.
-- Confirmed note deletion with no trash or recovery area.
-- A starter note for first-run onboarding.
+- Markdown live editing: write Markdown while headings, lists, links, and tasks stay structured in the same surface.
+- Local-first and offline-first: create, edit, search, delete, and apply templates without a network connection.
+- Autosave: note and template changes are saved without a user-facing save button.
+- Note search: find notes with case-insensitive partial matching against Markdown content.
+- Checkable tasks: toggle `- [ ]` and `- [x]` tasks while preserving them as Markdown text.
+- Note templates: manage reusable Markdown patterns and apply them to new or existing notes.
+- Keyboard editing: toggle task state and move note lines from the keyboard.
+- PWA update flow: installed PWAs detect new versions and wait for the user before reloading.
 
 ## Supported Markdown
 
 Jot Down treats these Markdown shapes as first-class:
 
-- Headings.
-- Paragraphs.
-- `-` bullet lists.
-- `- [ ]` and `- [x]` checkable tasks.
+- Headings
+- Paragraphs
+- `-` bullet lists
+- `- [ ]` and `- [x]` tasks
+- Links
+- Strong emphasis
 
-Other Markdown-like text is kept as note text but is not treated as a first-class structure in the initial version.
+Other Markdown-like text is kept as note text, but the initial version does not
+treat it as a dedicated structure.
 
-## PWA Usage
+## Product Principles
 
-The app is installable as a PWA through the browser's standard install action when supported. Jot Down does not show an in-app install prompt in the initial version.
+- Markdown text is the source of truth.
+- A note title is derived from the first heading, or from the first non-empty line when there is no heading.
+- A task is a note line, not a standalone todo object.
+- Notes are ordered by most recent Markdown edit time.
+- Deletion is confirmed and does not create a trash or archive area.
+- List navigation is display state; it does not change note content, note search, or note order.
 
-When an installed PWA detects a newly available app version, it shows a persistent update bar. The update is applied only after the user chooses to update, and the active note is saved before the app reloads.
+## Tech Stack
 
-## Development Checks
+- React 19
+- TypeScript
+- Vite
+- MDXEditor
+- Dexie / IndexedDB
+- Vite PWA
+- Biome
+- ESLint
+- Vitest
+- Cloudflare Workers Static Assets
 
-Install dependencies with `npm install` to also register the repository's Git hooks.
+## Development
 
-- `npm run format` formats tracked source and documentation files with Biome.
-- `npm run lint` runs ESLint, including React Hooks and React Refresh checks.
-- `npm run typecheck` runs TypeScript project references with `tsc -b`.
-- `npm run check` runs format verification, lint, and type checking. The same check runs before `git push`.
+Install dependencies. The `prepare` script also registers the repository Git hooks.
 
-## Out Of Scope Initially
+```bash
+npm install
+```
 
-- User accounts.
-- Cloud sync.
-- Import/export.
-- Folders, tags, and pinned notes.
-- Due dates, reminders, and notifications.
-- Separate preview mode.
-- App-specific settings screen.
+Start the local development server.
+
+```bash
+npm run dev
+```
+
+Run checks.
+
+```bash
+npm run format
+npm run lint
+npm run typecheck
+npm run test
+npm run check
+```
+
+`npm run check` runs format verification, lint, type checking, and coverage-backed
+tests. The same check runs from the pre-push hook.
+
+## Deployment
+
+Jot Down is designed to deploy as a Cloudflare Workers Static Assets app.
+
+```bash
+npm run build
+npm run deploy
+```
+
+When changes reach `main`, GitHub Actions is expected to run the same project
+checks before deploying with `wrangler deploy`.
+
+## Out Of Scope
+
+- User accounts
+- Cloud sync
+- Import / export
+- Folders, tags, and pinned notes
+- Due dates, reminders, and notifications
+- Separate preview mode
+- App-specific settings screen
