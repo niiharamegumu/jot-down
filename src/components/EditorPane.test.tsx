@@ -42,7 +42,6 @@ vi.mock('@mdxeditor/editor', async () => {
         <div
           aria-label="Markdown editor"
           contentEditable
-          onBlur={() => undefined}
           onInput={(event) => onChange(event.currentTarget.textContent ?? '')}
           suppressContentEditableWarning
         >
@@ -481,6 +480,32 @@ describe('EditorPane', () => {
     );
   });
 
+  it('moves selected note lines together with option arrow movement', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: 'A\nB\nC\nD' });
+
+    selectTextRange(screen.getByText('B').firstChild, 0, screen.getByText('C').firstChild, 1);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowDown',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('A\nD\nB\nC');
+  });
+
+  it('does not include a line when the selection ends at that line start', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: 'A\nB\nC' });
+
+    selectTextRange(screen.getByText('A').firstChild, 0, screen.getByText('B').firstChild, 0);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowDown',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('B\nA\nC');
+  });
+
   it('does not accept checklist normalization when loading a note', () => {
     const onMarkdownChange = vi.fn();
     mockSetMarkdownSideEffect = () => '- [ ] ccc\n- [ ] ddd\n- [ ] xxx';
@@ -517,6 +542,17 @@ describe('EditorPane', () => {
     fireEvent.input(editor);
 
     expect(onMarkdownChange).not.toHaveBeenCalled();
+  });
+
+  it('accepts user-created nested list indentation from editor change events', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '- aaa\n- bbb' });
+
+    const editor = screen.getByLabelText('Markdown editor');
+    editor.textContent = '- aaa\n  - bbb';
+    fireEvent.input(editor);
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('- aaa\n  - bbb');
   });
 
   it('keeps the moved Markdown line unchanged when the editor exports a normalized list', () => {
@@ -556,6 +592,44 @@ describe('EditorPane', () => {
     fireEvent.blur(screen.getByLabelText('Markdown editor'));
 
     expect(onMarkdownChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps selected moved Markdown lines unchanged when the editor exports a flattened nested list', () => {
+    const onMarkdownChange = vi.fn();
+    mockSetMarkdownSideEffect = () => '- [ ] 親B\n- [ ] 親A\n- [ ] 子A1';
+    renderEditor({
+      onMarkdownChange,
+      markdown: '- [ ] 親A\n  - [ ] 子A1\n- [ ] 親B'
+    });
+    onMarkdownChange.mockClear();
+
+    selectTextRange(screen.getByText('親A').firstChild, 0, screen.getByText('子A1').firstChild, 3);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowDown',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] 親B\n- [ ] 親A\n  - [ ] 子A1');
+    expect(onMarkdownChange).not.toHaveBeenCalledWith('- [ ] 親B\n- [ ] 親A\n- [ ] 子A1');
+  });
+
+  it('keeps selected moved plain list indentation when the editor exports a flattened nested list', () => {
+    const onMarkdownChange = vi.fn();
+    mockSetMarkdownSideEffect = () => '- 親B\n- 親A\n- 子A1';
+    renderEditor({
+      onMarkdownChange,
+      markdown: '- 親A\n  - 子A1\n- 親B'
+    });
+    onMarkdownChange.mockClear();
+
+    selectTextRange(screen.getByText('親A').firstChild, 0, screen.getByText('子A1').firstChild, 3);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowDown',
+      altKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('- 親B\n- 親A\n  - 子A1');
+    expect(onMarkdownChange).not.toHaveBeenCalledWith('- 親B\n- 親A\n- 子A1');
   });
 
   it('does not change note Markdown when a note line cannot move past the boundary', () => {
@@ -601,6 +675,37 @@ describe('EditorPane', () => {
     const range = selection?.getRangeAt(0);
     expect(range?.startContainer).toBe(movedTaskText);
     expect(range?.startOffset).toBe(0);
+  });
+
+  it('keeps selected note lines selected after option arrow movement', () => {
+    const animationFrameCallbacks: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      animationFrameCallbacks.push(callback);
+      return 1;
+    });
+
+    renderControlledEditor('A\nB\nC\nD');
+    animationFrameCallbacks.at(-1)?.(0);
+    animationFrameCallbacks.length = 0;
+
+    selectTextRange(screen.getByText('B').firstChild, 0, screen.getByText('C').firstChild, 1);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowDown',
+      altKey: true
+    });
+
+    const restoreSelection = animationFrameCallbacks.at(-1);
+    if (!restoreSelection) {
+      throw new Error('Expected selection restoration to be scheduled');
+    }
+
+    restoreSelection(0);
+
+    const selection = window.getSelection();
+    const range = selection?.getRangeAt(0);
+    expect(range?.toString()).toBe('BC');
+    expect(range?.startContainer).toBe(screen.getByText('B').firstChild);
+    expect(range?.endContainer).toBe(screen.getByText('C').firstChild);
   });
 
   it('inserts pasted Markdown through the Markdown editor import path', () => {
@@ -843,6 +948,25 @@ function selectText(node: ChildNode | null) {
 
   const range = document.createRange();
   range.selectNodeContents(node);
+
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function selectTextRange(
+  startNode: ChildNode | null,
+  startOffset: number,
+  endNode: ChildNode | null,
+  endOffset: number
+) {
+  if (!startNode || !endNode) {
+    throw new Error('Expected selectable text nodes');
+  }
+
+  const range = document.createRange();
+  range.setStart(startNode, startOffset);
+  range.setEnd(endNode, endOffset);
 
   const selection = window.getSelection();
   selection?.removeAllRanges();

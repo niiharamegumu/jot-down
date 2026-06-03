@@ -17,6 +17,11 @@ type MovableNoteBlock = {
   end: number;
 };
 
+export type NoteLineRange = {
+  startLineIndex: number;
+  endLineIndex: number;
+};
+
 export function createNote(markdown = '', id: string = crypto.randomUUID()): Note {
   return {
     id,
@@ -112,36 +117,23 @@ export function moveNoteLine(
   lineIndex: number,
   direction: 'up' | 'down'
 ): string {
-  const lines = markdown.split(/\r?\n/);
-  const blocks = getMovableNoteBlocks(lines);
-  const currentBlockIndex = getMovableNoteBlockIndex(blocks, lineIndex);
-  const targetBlockIndex =
-    currentBlockIndex < 0 ? -1 : currentBlockIndex + (direction === 'up' ? -1 : 1);
+  return moveNoteLines(markdown, { startLineIndex: lineIndex, endLineIndex: lineIndex }, direction);
+}
 
-  if (targetBlockIndex < 0 || targetBlockIndex >= blocks.length) {
-    return markdown;
-  }
+export function moveNoteLines(
+  markdown: string,
+  lineRange: NoteLineRange,
+  direction: 'up' | 'down'
+): string {
+  return getNoteLineMovement(markdown, lineRange, direction)?.markdown ?? markdown;
+}
 
-  const currentBlock = blocks[currentBlockIndex];
-  const targetBlock = blocks[targetBlockIndex];
-  const nextLines =
-    direction === 'up'
-      ? [
-          ...lines.slice(0, targetBlock.start),
-          ...lines.slice(currentBlock.start, currentBlock.end),
-          ...lines.slice(targetBlock.end, currentBlock.start),
-          ...lines.slice(targetBlock.start, targetBlock.end),
-          ...lines.slice(currentBlock.end)
-        ]
-      : [
-          ...lines.slice(0, currentBlock.start),
-          ...lines.slice(targetBlock.start, targetBlock.end),
-          ...lines.slice(currentBlock.end, targetBlock.start),
-          ...lines.slice(currentBlock.start, currentBlock.end),
-          ...lines.slice(targetBlock.end)
-        ];
-
-  return nextLines.join('\n');
+export function getNoteLineMovementTargetRange(
+  markdown: string,
+  lineRange: NoteLineRange,
+  direction: 'up' | 'down'
+): NoteLineRange | null {
+  return getNoteLineMovement(markdown, lineRange, direction)?.range ?? null;
 }
 
 export function getNoteLineMovementTargetIndex(
@@ -149,25 +141,86 @@ export function getNoteLineMovementTargetIndex(
   lineIndex: number,
   direction: 'up' | 'down'
 ): number {
-  const lines = markdown.split(/\r?\n/);
-  const blocks = getMovableNoteBlocks(lines);
-  const currentBlockIndex = getMovableNoteBlockIndex(blocks, lineIndex);
-  const targetBlockIndex =
-    currentBlockIndex < 0 ? -1 : currentBlockIndex + (direction === 'up' ? -1 : 1);
-
-  if (targetBlockIndex < 0 || targetBlockIndex >= blocks.length) {
+  const targetRange = getNoteLineMovementTargetRange(
+    markdown,
+    { startLineIndex: lineIndex, endLineIndex: lineIndex },
+    direction
+  );
+  if (!targetRange) {
     return -1;
   }
 
+  const lines = markdown.split(/\r?\n/);
+  const blocks = getMovableNoteBlocks(lines);
+  const currentBlockIndex = getMovableNoteBlockIndex(blocks, lineIndex);
   const currentBlock = blocks[currentBlockIndex];
-  const targetBlock = blocks[targetBlockIndex];
   const lineOffsetInBlock = lineIndex - currentBlock.start;
+  return targetRange.startLineIndex + lineOffsetInBlock;
+}
 
-  if (direction === 'up') {
-    return targetBlock.start + lineOffsetInBlock;
+function getNoteLineMovement(
+  markdown: string,
+  lineRange: NoteLineRange,
+  direction: 'up' | 'down'
+): { markdown: string; range: NoteLineRange } | null {
+  const lines = markdown.split(/\r?\n/);
+  const blocks = getMovableNoteBlocks(lines);
+  const selectedBlockIndexes = getMovableNoteBlockIndexesInRange(blocks, lineRange);
+
+  if (selectedBlockIndexes.length === 0) {
+    return null;
   }
 
-  return lineIndex + targetBlock.end - currentBlock.end;
+  const firstSelectedBlockIndex = selectedBlockIndexes[0];
+  const lastSelectedBlockIndex = selectedBlockIndexes[selectedBlockIndexes.length - 1];
+  const targetBlockIndex =
+    direction === 'up' ? firstSelectedBlockIndex - 1 : lastSelectedBlockIndex + 1;
+
+  if (targetBlockIndex < 0 || targetBlockIndex >= blocks.length) {
+    return null;
+  }
+
+  const selectedIndexSet = new Set(selectedBlockIndexes);
+  const selectedBlocks = blocks.filter((_, index) => selectedIndexSet.has(index));
+  const nextBlocks = blocks.filter((_, index) => !selectedIndexSet.has(index));
+  const targetBlock = blocks[targetBlockIndex];
+  const nextTargetBlockIndex = nextBlocks.indexOf(targetBlock);
+  const insertBlockIndex = direction === 'up' ? nextTargetBlockIndex : nextTargetBlockIndex + 1;
+
+  nextBlocks.splice(insertBlockIndex, 0, ...selectedBlocks);
+
+  const nextLines: string[] = [];
+  const selectedNextStarts: number[] = [];
+  const selectedNextEnds: number[] = [];
+
+  for (let blockIndex = 0; blockIndex < nextBlocks.length; blockIndex += 1) {
+    const block = nextBlocks[blockIndex];
+    const gapStart = blockIndex === 0 ? 0 : blocks[blockIndex - 1].end;
+    const gapEnd = blockIndex === 0 ? blocks[0].start : blocks[blockIndex].start;
+
+    nextLines.push(...lines.slice(gapStart, gapEnd));
+    const nextStart = nextLines.length;
+    nextLines.push(...lines.slice(block.start, block.end));
+    const nextEnd = nextLines.length;
+
+    if (selectedBlocks.includes(block)) {
+      selectedNextStarts.push(nextStart);
+      selectedNextEnds.push(nextEnd);
+    }
+  }
+
+  const lastBlock = blocks.at(-1);
+  if (lastBlock) {
+    nextLines.push(...lines.slice(lastBlock.end));
+  }
+
+  return {
+    markdown: nextLines.join('\n'),
+    range: {
+      startLineIndex: Math.min(...selectedNextStarts),
+      endLineIndex: Math.max(...selectedNextEnds) - 1
+    }
+  };
 }
 
 function stripMarkdownChrome(value: string): string {
@@ -244,6 +297,18 @@ function getMovableNoteBlocks(lines: string[]): MovableNoteBlock[] {
 
 function getMovableNoteBlockIndex(blocks: MovableNoteBlock[], lineIndex: number): number {
   return blocks.findIndex((block) => lineIndex >= block.start && lineIndex < block.end);
+}
+
+function getMovableNoteBlockIndexesInRange(
+  blocks: MovableNoteBlock[],
+  lineRange: NoteLineRange
+): number[] {
+  const startLineIndex = Math.min(lineRange.startLineIndex, lineRange.endLineIndex);
+  const endLineIndex = Math.max(lineRange.startLineIndex, lineRange.endLineIndex);
+
+  return blocks.flatMap((block, index) =>
+    block.start <= endLineIndex && block.end > startLineIndex ? [index] : []
+  );
 }
 
 function isListItemContinuationLine(line: string, listItemIndent: number): boolean {

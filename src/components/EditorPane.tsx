@@ -18,15 +18,15 @@ import {
 } from 'react';
 import type { Note } from '../domain/note';
 import {
-  getNoteLineMovementTargetIndex,
-  moveNoteLine,
+  getNoteLineMovementTargetRange,
+  moveNoteLines,
   normalizeSupportedMarkdown,
   toggleTaskAtIndex
 } from '../domain/note';
 import type { NoteTemplate } from '../domain/noteTemplate';
 import {
-  captureNoteLineSelectionSnapshot,
-  getSelectedNoteLineIndex,
+  captureNoteLineRangeSelectionSnapshot,
+  getSelectedNoteLineRange,
   restoreNoteLineSelectionSnapshot,
   type NoteLineSelectionSnapshot
 } from './editorLineSelection';
@@ -461,8 +461,8 @@ export function EditorPane({
     }
 
     const currentMarkdown = markdown;
-    const lineIndex = getSelectedNoteLineIndex(editorRoot, currentMarkdown);
-    if (lineIndex < 0) {
+    const lineRange = getSelectedNoteLineRange(editorRoot, currentMarkdown);
+    if (!lineRange) {
       return;
     }
 
@@ -470,16 +470,16 @@ export function EditorPane({
     event.stopPropagation();
     event.stopImmediatePropagation();
 
-    const targetLineIndex = getNoteLineMovementTargetIndex(currentMarkdown, lineIndex, direction);
-    if (targetLineIndex < 0) {
+    const targetLineRange = getNoteLineMovementTargetRange(currentMarkdown, lineRange, direction);
+    if (!targetLineRange) {
       return;
     }
 
-    const nextMarkdown = moveNoteLine(currentMarkdown, lineIndex, direction);
+    const nextMarkdown = moveNoteLines(currentMarkdown, lineRange, direction);
     if (nextMarkdown === currentMarkdown) {
-      const selectionSnapshot = captureNoteLineSelectionSnapshot(
+      const selectionSnapshot = captureNoteLineRangeSelectionSnapshot(
         activeNoteId,
-        targetLineIndex,
+        targetLineRange,
         editorRoot,
         nextMarkdown
       );
@@ -491,9 +491,9 @@ export function EditorPane({
       return;
     }
 
-    const selectionSnapshot = captureNoteLineSelectionSnapshot(
+    const selectionSnapshot = captureNoteLineRangeSelectionSnapshot(
       activeNoteId,
-      targetLineIndex,
+      targetLineRange,
       editorRoot,
       nextMarkdown
     );
@@ -623,7 +623,7 @@ export function EditorPane({
       return false;
     }
 
-    if (isEditorListNormalization(pendingProgrammaticMarkdown, nextMarkdown)) {
+    if (isProgrammaticEditorListNormalization(pendingProgrammaticMarkdown, nextMarkdown)) {
       pendingProgrammaticMarkdownRef.current = null;
       return true;
     }
@@ -633,6 +633,20 @@ export function EditorPane({
   }
 
   function isEditorListNormalization(sourceMarkdown: string, nextMarkdown: string): boolean {
+    return isChecklistNormalization(sourceMarkdown, nextMarkdown);
+  }
+
+  function isProgrammaticEditorListNormalization(
+    sourceMarkdown: string,
+    nextMarkdown: string
+  ): boolean {
+    return (
+      isChecklistNormalization(sourceMarkdown, nextMarkdown) ||
+      isListStructureFlattening(sourceMarkdown, nextMarkdown)
+    );
+  }
+
+  function isChecklistNormalization(sourceMarkdown: string, nextMarkdown: string): boolean {
     if (
       nextMarkdown === sourceMarkdown ||
       !hasSameReadableNoteLines(sourceMarkdown, nextMarkdown)
@@ -646,6 +660,31 @@ export function EditorPane({
       sourceLines.length === nextLines.length &&
       sourceLines.every(isMarkdownListLine) &&
       nextLines.every(isMarkdownTaskLine)
+    );
+  }
+
+  function isListStructureFlattening(sourceMarkdown: string, nextMarkdown: string): boolean {
+    if (
+      nextMarkdown === sourceMarkdown ||
+      !hasSameReadableNoteLines(sourceMarkdown, nextMarkdown)
+    ) {
+      return false;
+    }
+
+    const sourceLines = getNonBlankNoteLines(sourceMarkdown);
+    const nextLines = getNonBlankNoteLines(nextMarkdown);
+    return (
+      sourceLines.length === nextLines.length &&
+      sourceLines.every(isMarkdownListLine) &&
+      nextLines.every(isMarkdownListLine) &&
+      sourceLines.some(
+        (line, index) =>
+          getMarkdownLineIndentLength(line) > getMarkdownLineIndentLength(nextLines[index])
+      ) &&
+      nextLines.every(
+        (line, index) =>
+          getMarkdownLineIndentLength(line) <= getMarkdownLineIndentLength(sourceLines[index])
+      )
     );
   }
 
@@ -681,6 +720,10 @@ export function EditorPane({
 
   function isMarkdownTaskLine(line: string): boolean {
     return /^\s*[-*]\s+\[(?: |x|X)\]\s+/.test(line);
+  }
+
+  function getMarkdownLineIndentLength(line: string): number {
+    return line.match(/^\s*/)?.[0].length ?? 0;
   }
 
   function toEditorMarkdown(value: string): string {

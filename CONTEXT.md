@@ -33,7 +33,7 @@ A single Markdown line inside a note's text, treated as one selectable writing u
 _Avoid_: Visual row, task object, block record
 
 **Note line movement**:
-A keyboard-driven note edit that moves the current non-empty note line earlier or later within the same note text while skipping blank lines as spacing. Moving a list item also moves its indented continuation lines, such as a following Markdown link line, as the same writing unit. Moving a line only changes its position; indentation, parent-child-looking Markdown, and task checked state remain part of the moved Markdown text.
+A keyboard-driven note edit that moves the current non-empty note line, or every note line touched by a text selection range, earlier or later within the same note text while skipping blank lines as spacing. Multiple note lines touched by one text selection range move together as one ordered group. Moving a list item also moves its indented continuation lines, such as a following Markdown link line, as the same writing unit. Moving a line only changes its position; indentation, parent-child-looking Markdown, and task checked state remain part of the moved Markdown text.
 _Avoid_: Drag sorting, task sorting, toolbar reorder action, moving a task object
 
 **Note deletion**:
@@ -137,6 +137,33 @@ Domain expert: "No. A note line is one Markdown line, so the whole line moves to
 
 Developer: "When a checked task line is moved, is the task's checked state reattached somewhere else?"
 Domain expert: "No. The checked marker moves with the note line because it is part of that line's Markdown text."
+
+Developer: "If a text selection starts in one note line and ends in another, which lines move?"
+Domain expert: "Every note line touched by the selection moves together as one note line movement."
+
+Developer: "If the selected range includes a blank line, does the blank line move too?"
+Domain expert: "No. Blank lines are spacing, so note line movement moves only the touched non-empty note lines."
+
+Developer: "If the selected range crosses a blank line between two non-empty note lines, do those non-empty lines move separately?"
+Domain expert: "No. They move together as one selected note line group, while the blank line remains spacing."
+
+Developer: "If the selected range touches only an indented continuation line under a list item, can that continuation line move by itself?"
+Domain expert: "No. The containing list item moves with its continuation lines as one writing unit."
+
+Developer: "After moving multiple selected note lines, should the selection collapse to one cursor?"
+Domain expert: "No. The moved note lines remain selected so the same group can be moved again."
+
+Developer: "Does dragging a text selection from bottom to top change which note lines move?"
+Domain expert: "No. Note line movement uses the touched note lines in the normalized text selection range, regardless of selection direction."
+
+Developer: "If identical note lines exist, does note line movement follow the text content to restore selection?"
+Domain expert: "No. Selection follows the moved note line positions, not matching Markdown text."
+
+Developer: "If only part of one note line is selected, does note line movement move only that text?"
+Domain expert: "No. The whole touched note line moves, while the same in-line text range remains selected after the move."
+
+Developer: "Does every editor action use selected note lines as its target?"
+Domain expert: "No. This selected-range behavior belongs to note line movement."
 
 Developer: "When a note is duplicated, should the app add '(copy)' to the heading?"
 Domain expert: "No. Note duplication creates another note with the same Markdown text. Changing the heading would change the duplicated note content."

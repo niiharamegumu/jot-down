@@ -1,11 +1,13 @@
 import { createRootEditorSubscription$, realmPlugin } from '@mdxeditor/editor';
 import type { LexicalEditor, LexicalNode } from 'lexical';
 import {
+  $createRangeSelection,
   $getNearestNodeFromDOMNode,
   $getSelection,
   $isElementNode,
   $isRangeSelection,
-  $isTextNode
+  $isTextNode,
+  $setSelection
 } from 'lexical';
 
 export const taskCheckboxHitAreaWidthPx = 24;
@@ -74,6 +76,26 @@ export function selectMdxEditorTextOffset(scope: HTMLElement, offset: number): b
   }
 
   selectTextOffsetInEditor(editor, scope, offset);
+  return true;
+}
+
+export function selectMdxEditorTextRange(
+  startScope: HTMLElement,
+  startOffset: number,
+  endScope: HTMLElement,
+  endOffset: number
+): boolean {
+  const root = startScope.closest('[contenteditable="true"]');
+  if (!(root instanceof HTMLElement) || root !== endScope.closest('[contenteditable="true"]')) {
+    return false;
+  }
+
+  const editor = editorsByRoot.get(root);
+  if (!editor) {
+    return false;
+  }
+
+  selectTextRangeInEditor(editor, startScope, startOffset, endScope, endOffset);
   return true;
 }
 
@@ -175,6 +197,61 @@ function selectTextOffsetInEditor(editor: LexicalEditor, scope: HTMLElement, off
     { discrete: true }
   );
   editor.focus();
+}
+
+function selectTextRangeInEditor(
+  editor: LexicalEditor,
+  startScope: HTMLElement,
+  startOffset: number,
+  endScope: HTMLElement,
+  endOffset: number
+) {
+  const startPosition = findTextPosition(startScope, startOffset);
+  const endPosition = findTextPosition(endScope, endOffset);
+
+  editor.update(
+    () => {
+      const startPoint = getLexicalSelectionPoint(startPosition.node, startPosition.offset);
+      const endPoint = getLexicalSelectionPoint(endPosition.node, endPosition.offset);
+      if (!startPoint || !endPoint) {
+        return;
+      }
+
+      const selection = $createRangeSelection();
+      selection.anchor.set(startPoint.key, startPoint.offset, startPoint.type);
+      selection.focus.set(endPoint.key, endPoint.offset, endPoint.type);
+      $setSelection(selection);
+    },
+    { discrete: true }
+  );
+  editor.focus();
+}
+
+function getLexicalSelectionPoint(
+  node: Node,
+  offset: number
+): { key: string; offset: number; type: 'text' | 'element' } | null {
+  const lexicalNode =
+    $getNearestNodeFromDOMNode(node) ??
+    (node.parentElement ? $getNearestNodeFromDOMNode(node.parentElement) : null);
+
+  if ($isTextNode(lexicalNode)) {
+    return {
+      key: lexicalNode.getKey(),
+      offset: Math.min(offset, lexicalNode.getTextContentSize()),
+      type: 'text'
+    };
+  }
+
+  if ($isElementNode(lexicalNode)) {
+    return {
+      key: lexicalNode.getKey(),
+      offset: Math.min(offset, lexicalNode.getChildrenSize()),
+      type: 'element'
+    };
+  }
+
+  return null;
 }
 
 function createCaretRangeFromPoint(clientX: number, clientY: number): Range | null {

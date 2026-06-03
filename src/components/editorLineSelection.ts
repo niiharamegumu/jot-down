@@ -2,14 +2,18 @@ import {
   findTextPosition,
   getSelectedMdxEditorElement,
   getTextOffset,
-  selectMdxEditorTextOffset
+  selectMdxEditorTextOffset,
+  selectMdxEditorTextRange
 } from './mdxEditorSelectionPlugin';
+import type { NoteLineRange } from '../domain/note';
 
 export type NoteLineSelectionSnapshot = {
   noteId: string;
   lineIndex: number;
+  endLineIndex: number;
   markdown: string;
   offset: number;
+  endOffset: number;
   scrollPositions: ScrollPositionSnapshot[];
 };
 
@@ -23,12 +27,36 @@ const editorLineSelector = 'h1,h2,h3,h4,h5,h6,p,li';
 const markdownListItemPattern = /^(\s*)([-*])\s+(?:\[(?: |x|X)\]\s+)?/;
 
 export function getSelectedNoteLineIndex(root: HTMLElement, markdown: string): number {
-  const selectedLine = getSelectedNoteLineElement(root);
-  if (!selectedLine) {
-    return -1;
+  return getSelectedNoteLineRange(root, markdown)?.startLineIndex ?? -1;
+}
+
+export function getSelectedNoteLineRange(
+  root: HTMLElement,
+  markdown: string
+): NoteLineRange | null {
+  const selectedLines = getSelectedNoteLineElements(root);
+  if (selectedLines.length === 0) {
+    const selectedLine = getSelectedNoteLineElement(root);
+    if (!selectedLine) {
+      return null;
+    }
+
+    const lineIndex = getMarkdownLineIndexForEditorLine(markdown, root, selectedLine);
+    return lineIndex < 0 ? null : { startLineIndex: lineIndex, endLineIndex: lineIndex };
   }
 
-  return getMarkdownLineIndexForEditorLine(markdown, root, selectedLine);
+  const lineIndexes = selectedLines
+    .map((line) => getMarkdownLineIndexForEditorLine(markdown, root, line))
+    .filter((lineIndex) => lineIndex >= 0);
+
+  if (lineIndexes.length === 0) {
+    return null;
+  }
+
+  return {
+    startLineIndex: Math.min(...lineIndexes),
+    endLineIndex: Math.max(...lineIndexes)
+  };
 }
 
 export function captureNoteLineSelectionSnapshot(
@@ -37,23 +65,38 @@ export function captureNoteLineSelectionSnapshot(
   root: HTMLElement,
   nextMarkdown: string
 ): NoteLineSelectionSnapshot | null {
-  const selectedLine = getSelectedNoteLineElement(root);
+  return captureNoteLineRangeSelectionSnapshot(
+    noteId,
+    { startLineIndex: nextLineIndex, endLineIndex: nextLineIndex },
+    root,
+    nextMarkdown
+  );
+}
+
+export function captureNoteLineRangeSelectionSnapshot(
+  noteId: string,
+  nextLineRange: NoteLineRange,
+  root: HTMLElement,
+  nextMarkdown: string
+): NoteLineSelectionSnapshot | null {
+  const selectedLines = getSelectedNoteLineElements(root);
+  const selectedLine = selectedLines[0] ?? getSelectedNoteLineElement(root);
   if (!selectedLine) {
     return null;
   }
 
-  const selection = window.getSelection();
-  const selectedNode = selection?.anchorNode;
-  const offset =
-    selectedNode && selectedLine.contains(selectedNode)
-      ? getTextOffset(selectedLine, selectedNode, selection.anchorOffset)
-      : 0;
+  const selectionOffsets = getSelectedNoteLineOffsets(root, selectedLines);
+  if (!selectionOffsets) {
+    return null;
+  }
 
   return {
     noteId,
-    lineIndex: nextLineIndex,
+    lineIndex: nextLineRange.startLineIndex,
+    endLineIndex: nextLineRange.endLineIndex,
     markdown: nextMarkdown,
-    offset,
+    offset: selectionOffsets.offset,
+    endOffset: selectionOffsets.endOffset,
     scrollPositions: captureScrollPositions(selectedLine)
   };
 }
@@ -69,13 +112,31 @@ export function restoreNoteLineSelectionSnapshot(
   }
 
   const line = getEditorLineElementAtMarkdownLine(root, snapshot.markdown, snapshot.lineIndex);
-  if (!line) {
+  const endLine = getEditorLineElementAtMarkdownLine(
+    root,
+    snapshot.markdown,
+    snapshot.endLineIndex
+  );
+  if (!line || !endLine) {
     return;
   }
 
   restoreScrollPositions(snapshot.scrollPositions);
 
-  if (!selectMdxEditorTextOffset(line, snapshot.offset)) {
+  if (snapshot.lineIndex !== snapshot.endLineIndex || snapshot.offset !== snapshot.endOffset) {
+    if (!selectMdxEditorTextRange(line, snapshot.offset, endLine, snapshot.endOffset)) {
+      focusWithoutScrolling(line);
+      const startPosition = findTextPosition(line, snapshot.offset);
+      const endPosition = findTextPosition(endLine, snapshot.endOffset);
+      const range = document.createRange();
+      range.setStart(startPosition.node, startPosition.offset);
+      range.setEnd(endPosition.node, endPosition.offset);
+
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+  } else if (!selectMdxEditorTextOffset(line, snapshot.offset)) {
     focusWithoutScrolling(line);
 
     const position = findTextPosition(line, snapshot.offset);
@@ -116,6 +177,82 @@ function getSelectedNoteLineElement(root: HTMLElement): HTMLElement | null {
     selectedNode instanceof HTMLElement ? selectedNode : selectedNode.parentElement;
   const line = selectedElement?.closest(editorLineSelector);
   return line instanceof HTMLElement && root.contains(line) ? line : null;
+}
+
+function getSelectedNoteLineElements(root: HTMLElement): HTMLElement[] {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return [];
+  }
+
+  const selectionRange = selection.getRangeAt(0);
+  if (!root.contains(selectionRange.commonAncestorContainer)) {
+    return [];
+  }
+
+  return getNoteLineElements(root).filter((line) =>
+    getSelectedTextLengthInLine(selectionRange, line)
+  );
+}
+
+function getSelectedNoteLineOffsets(
+  root: HTMLElement,
+  selectedLines: HTMLElement[]
+): { offset: number; endOffset: number } | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  if (selectedLines.length === 0 || selection.isCollapsed) {
+    const selectedLine = getSelectedNoteLineElement(root);
+    const selectedNode = selection.anchorNode;
+    const offset =
+      selectedLine && selectedNode && selectedLine.contains(selectedNode)
+        ? getTextOffset(selectedLine, selectedNode, selection.anchorOffset)
+        : 0;
+    return { offset, endOffset: offset };
+  }
+
+  const selectionRange = selection.getRangeAt(0);
+  const firstLine = selectedLines[0];
+  const lastLine = selectedLines[selectedLines.length - 1];
+  const firstLineRange = document.createRange();
+  firstLineRange.selectNodeContents(firstLine);
+  const lastLineRange = document.createRange();
+  lastLineRange.selectNodeContents(lastLine);
+
+  const startsInsideFirstLine = firstLine.contains(selectionRange.startContainer);
+  const endsInsideLastLine = lastLine.contains(selectionRange.endContainer);
+
+  return {
+    offset: startsInsideFirstLine
+      ? getTextOffset(firstLine, selectionRange.startContainer, selectionRange.startOffset)
+      : 0,
+    endOffset: endsInsideLastLine
+      ? getTextOffset(lastLine, selectionRange.endContainer, selectionRange.endOffset)
+      : (lastLine.textContent?.length ?? 0)
+  };
+}
+
+function getSelectedTextLengthInLine(selectionRange: Range, line: HTMLElement): boolean {
+  if (!selectionRange.intersectsNode(line)) {
+    return false;
+  }
+
+  const selectedLineRange = selectionRange.cloneRange();
+  const lineRange = document.createRange();
+  lineRange.selectNodeContents(line);
+
+  if (selectedLineRange.compareBoundaryPoints(Range.START_TO_START, lineRange) < 0) {
+    selectedLineRange.setStart(lineRange.startContainer, lineRange.startOffset);
+  }
+
+  if (selectedLineRange.compareBoundaryPoints(Range.END_TO_END, lineRange) > 0) {
+    selectedLineRange.setEnd(lineRange.endContainer, lineRange.endOffset);
+  }
+
+  return selectedLineRange.toString().length > 0;
 }
 
 function getLineFromRootOffset(root: HTMLElement, offset: number): HTMLElement | null {
