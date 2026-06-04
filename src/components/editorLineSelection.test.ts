@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { getSelectedNoteLineIndex, restoreNoteLineSelectionSnapshot } from './editorLineSelection';
 
 describe('editor line selection', () => {
@@ -115,6 +115,77 @@ describe('editor line selection', () => {
       expect(selectedElement?.textContent).toContain('a');
       expect(selectedElement?.textContent).toContain('futureoffice');
     } finally {
+      root.remove();
+    }
+  });
+
+  it('restores selection to a paragraph after an editor-only blank line', () => {
+    const root = document.createElement('div');
+    root.setAttribute('contenteditable', 'true');
+    root.innerHTML = `
+      <ul>
+        <li role="checkbox"><span data-lexical-text="true">買い物</span></li>
+        <li role="checkbox"><span data-lexical-text="true">メール返信</span></li>
+      </ul>
+      <p><br></p>
+      <p><span data-lexical-text="true">本文</span></p>
+    `;
+    document.body.append(root);
+
+    try {
+      restoreNoteLineSelectionSnapshot(
+        {
+          noteId: 'note-1',
+          lineIndex: 2,
+          endLineIndex: 2,
+          markdown: '- [ ] 買い物\n- [x] メール返信\n本文',
+          offset: 0,
+          endOffset: 0,
+          scrollPositions: []
+        },
+        () => 'note-1',
+        root,
+        () => 1
+      );
+
+      const selection = window.getSelection();
+      const selectedElement = selection?.anchorNode?.parentElement?.closest('p');
+      expect(selectedElement?.textContent).toBe('本文');
+    } finally {
+      root.remove();
+    }
+  });
+
+  it('reveals the selected editor line when restoring a jump movement selection', () => {
+    const root = document.createElement('div');
+    root.setAttribute('contenteditable', 'true');
+    root.innerHTML = '<p><span data-lexical-text="true">本文</span></p>';
+    document.body.append(root);
+
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+
+    try {
+      restoreNoteLineSelectionSnapshot(
+        {
+          noteId: 'note-1',
+          lineIndex: 0,
+          endLineIndex: 0,
+          markdown: '本文',
+          offset: 0,
+          endOffset: 0,
+          revealSelection: true,
+          scrollPositions: []
+        },
+        () => 'note-1',
+        root,
+        () => 1
+      );
+
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+    } finally {
+      HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
       root.remove();
     }
   });

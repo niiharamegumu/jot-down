@@ -14,6 +14,7 @@ export type NoteLineSelectionSnapshot = {
   markdown: string;
   offset: number;
   endOffset: number;
+  revealSelection?: boolean;
   scrollPositions: ScrollPositionSnapshot[];
 };
 
@@ -106,9 +107,9 @@ export function restoreNoteLineSelectionSnapshot(
   getCurrentNoteId: () => string | null,
   root: HTMLElement | null,
   scheduleAnimationFrame: typeof window.requestAnimationFrame = window.requestAnimationFrame
-) {
+): boolean {
   if (snapshot.noteId !== getCurrentNoteId() || !root) {
-    return;
+    return false;
   }
 
   const line = getEditorLineElementAtMarkdownLine(root, snapshot.markdown, snapshot.lineIndex);
@@ -118,43 +119,58 @@ export function restoreNoteLineSelectionSnapshot(
     snapshot.endLineIndex
   );
   if (!line || !endLine) {
-    return;
+    return false;
   }
 
-  restoreScrollPositions(snapshot.scrollPositions);
+  if (!snapshot.revealSelection) {
+    restoreScrollPositions(snapshot.scrollPositions);
+  }
 
   if (snapshot.lineIndex !== snapshot.endLineIndex || snapshot.offset !== snapshot.endOffset) {
-    if (!selectMdxEditorTextRange(line, snapshot.offset, endLine, snapshot.endOffset)) {
-      focusWithoutScrolling(line);
-      const startPosition = findTextPosition(line, snapshot.offset);
-      const endPosition = findTextPosition(endLine, snapshot.endOffset);
-      const range = document.createRange();
-      range.setStart(startPosition.node, startPosition.offset);
-      range.setEnd(endPosition.node, endPosition.offset);
-
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-    }
-  } else if (!selectMdxEditorTextOffset(line, snapshot.offset)) {
-    focusWithoutScrolling(line);
-
-    const position = findTextPosition(line, snapshot.offset);
-    const range = document.createRange();
-    range.setStart(position.node, position.offset);
-    range.collapse(true);
-
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
+    selectMdxEditorTextRange(line, snapshot.offset, endLine, snapshot.endOffset);
+  } else {
+    selectMdxEditorTextOffset(line, snapshot.offset);
   }
+  restoreBrowserSelection(line, snapshot.offset, endLine, snapshot.endOffset);
 
-  restoreScrollPositions(snapshot.scrollPositions);
+  if (snapshot.revealSelection) {
+    scrollLineIntoView(line);
+  } else {
+    restoreScrollPositions(snapshot.scrollPositions);
+  }
   scheduleAnimationFrame(() => {
     if (snapshot.noteId === getCurrentNoteId()) {
-      restoreScrollPositions(snapshot.scrollPositions);
+      if (snapshot.revealSelection) {
+        scrollLineIntoView(line);
+      } else {
+        restoreScrollPositions(snapshot.scrollPositions);
+      }
     }
   });
+  return true;
+}
+
+function scrollLineIntoView(line: HTMLElement) {
+  line.scrollIntoView?.({ block: 'nearest' });
+}
+
+function restoreBrowserSelection(
+  line: HTMLElement,
+  offset: number,
+  endLine: HTMLElement,
+  endOffset: number
+) {
+  focusWithoutScrolling(line.closest('[contenteditable="true"]') ?? line);
+
+  const startPosition = findTextPosition(line, offset);
+  const endPosition = findTextPosition(endLine, endOffset);
+  const range = document.createRange();
+  range.setStart(startPosition.node, startPosition.offset);
+  range.setEnd(endPosition.node, endPosition.offset);
+
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
 }
 
 function getSelectedNoteLineElement(root: HTMLElement): HTMLElement | null {
@@ -266,8 +282,14 @@ function getLineFromRootOffset(root: HTMLElement, offset: number): HTMLElement |
 function getNoteLineElements(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll(editorLineSelector)).filter(
     (line): line is HTMLElement =>
-      line instanceof HTMLElement && !isNestedListWrapperWithoutOwnLineText(line)
+      line instanceof HTMLElement &&
+      !isEmptyEditorLine(line) &&
+      !isNestedListWrapperWithoutOwnLineText(line)
   );
+}
+
+function isEmptyEditorLine(line: HTMLElement): boolean {
+  return line.textContent?.trim() === '' && !line.querySelector('input[type="checkbox"]');
 }
 
 function isNestedListWrapperWithoutOwnLineText(line: HTMLElement): boolean {
