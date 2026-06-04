@@ -360,7 +360,21 @@ describe('EditorPane', () => {
     expect(onMarkdownChange).toHaveBeenCalledWith('- [x] メール返信\n- [ ] 買い物\n本文');
   });
 
-  it('moves the selected note line to the start with command option arrow up', () => {
+  it('moves the selected note line to the start with control option arrow up', () => {
+    const onMarkdownChange = vi.fn();
+    renderEditor({ onMarkdownChange, markdown: '先頭\n- [ ] 買い物\n- [x] メール返信\n本文' });
+
+    selectText(screen.getByText('メール返信').firstChild);
+    fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
+      key: 'ArrowUp',
+      altKey: true,
+      ctrlKey: true
+    });
+
+    expect(onMarkdownChange).toHaveBeenCalledWith('- [x] メール返信\n先頭\n- [ ] 買い物\n本文');
+  });
+
+  it('does not move the selected note line with command option arrow up', () => {
     const onMarkdownChange = vi.fn();
     renderEditor({ onMarkdownChange, markdown: '先頭\n- [ ] 買い物\n- [x] メール返信\n本文' });
 
@@ -371,7 +385,7 @@ describe('EditorPane', () => {
       metaKey: true
     });
 
-    expect(onMarkdownChange).toHaveBeenCalledWith('- [x] メール返信\n先頭\n- [ ] 買い物\n本文');
+    expect(onMarkdownChange).not.toHaveBeenCalled();
   });
 
   it('moves the selected note line down with option arrow down', () => {
@@ -387,7 +401,7 @@ describe('EditorPane', () => {
     expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] 買い物\n- [x] メール返信\n本文');
   });
 
-  it('moves the selected note line to the end with command option arrow down', () => {
+  it('moves the selected note line to the end with control option arrow down', () => {
     const onMarkdownChange = vi.fn();
     renderEditor({ onMarkdownChange, markdown: '- [ ] 買い物\n本文\n- [x] メール返信\n末尾' });
 
@@ -395,7 +409,7 @@ describe('EditorPane', () => {
     fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
       key: 'ArrowDown',
       altKey: true,
-      metaKey: true
+      ctrlKey: true
     });
 
     expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] 買い物\n- [x] メール返信\n末尾\n本文');
@@ -414,7 +428,7 @@ describe('EditorPane', () => {
     fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
       key: 'ArrowUp',
       altKey: true,
-      metaKey: true
+      ctrlKey: true
     });
     flushAnimationFrames(animationFrameCallbacks);
 
@@ -434,7 +448,7 @@ describe('EditorPane', () => {
     fireEvent.keyDown(screen.getByLabelText('Markdown editor'), {
       key: 'ArrowDown',
       altKey: true,
-      metaKey: true
+      ctrlKey: true
     });
     flushAnimationFrames(animationFrameCallbacks);
 
@@ -959,9 +973,9 @@ describe('EditorPane', () => {
     expect(screen.getByText('行を上へ移動')).toBeInTheDocument();
     expect(screen.getByText('⌥ + ↓')).toBeInTheDocument();
     expect(screen.getByText('行を下へ移動')).toBeInTheDocument();
-    expect(screen.getByText('⌘ + ⌥ + ↑')).toBeInTheDocument();
+    expect(screen.getByText('⌃ + ⌥ + ↑')).toBeInTheDocument();
     expect(screen.getByText('行を先頭へ移動')).toBeInTheDocument();
-    expect(screen.getByText('⌘ + ⌥ + ↓')).toBeInTheDocument();
+    expect(screen.getByText('⌃ + ⌥ + ↓')).toBeInTheDocument();
     expect(screen.getByText('行を末尾へ移動')).toBeInTheDocument();
     expect(screen.getByText('⌘ + クリック')).toBeInTheDocument();
     expect(screen.getByText('リンクを開く')).toBeInTheDocument();
