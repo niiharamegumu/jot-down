@@ -23,6 +23,17 @@ vi.mock('@mdxeditor/editor', async () => {
         focus: (callback?: () => void) => callback?.()
       }));
 
+      const link = markdown.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (link) {
+        return (
+          <div aria-label="Markdown editor" contentEditable suppressContentEditableWarning>
+            <a href={link[2]} onClick={(event) => event.preventDefault()}>
+              {link[1]}
+            </a>
+          </div>
+        );
+      }
+
       return <textarea aria-label="Markdown editor" value={markdown} readOnly />;
     })
   };
@@ -97,6 +108,26 @@ describe('TemplateManager', () => {
       '参考[https://example.com/template](https://example.com/template)を見る';
     expect(mockSetMarkdown).toHaveBeenCalledWith(normalizedMarkdown);
     expect(onChangeTemplateMarkdown).toHaveBeenCalledWith(normalizedMarkdown);
+  });
+
+  it('opens a template Markdown link with command click', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+
+    renderManager({
+      templates: [
+        {
+          id: 'template-1',
+          name: '会議',
+          markdown: '[MDXEditor](https://mdxeditor.dev/)',
+          updatedAt: '2026-05-28T00:00:00.000Z'
+        }
+      ],
+      selectedTemplateId: 'template-1'
+    });
+
+    fireEvent.click(screen.getByRole('link', { name: 'MDXEditor' }), { metaKey: true });
+
+    expect(open).toHaveBeenCalledWith('https://mdxeditor.dev/', '_blank', 'noopener,noreferrer');
   });
 
   it('collapses to a template list navigation toggle', () => {

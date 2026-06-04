@@ -36,6 +36,7 @@ import {
 } from './editorMarkdownBoundaries';
 import { syncNormalizedEditorMarkdown as syncNormalizedMarkdownFromEditor } from './editorMarkdownSync';
 import { installMdxEditorFloatingUiFixes, isMdxEditorFloatingUiElement } from './editorFloatingUi';
+import { openLinkFromCommandClick } from './editorLinkInteraction';
 import {
   captureTaskSelectionSnapshot,
   restoreTaskSelectionSnapshot,
@@ -196,6 +197,10 @@ export function EditorPane({
               <kbd>⌥ + ↓</kbd>
               <span>行を下へ移動</span>
             </span>
+            <span>
+              <kbd>⌘ + クリック</kbd>
+              <span>リンクを開く</span>
+            </span>
           </span>
         </button>
         <button
@@ -302,7 +307,7 @@ export function EditorPane({
         ref={editorShellRef}
         className="editor-shell"
         onBlurCapture={handleEditorBlur}
-        onClickCapture={handleTaskClick}
+        onClickCapture={handleEditorClick}
         onPasteCapture={handleEditorPaste}
       >
         <MDXEditor
@@ -366,7 +371,11 @@ export function EditorPane({
     }
   }
 
-  function handleTaskClick(event: ReactMouseEvent<HTMLElement>) {
+  function handleEditorClick(event: ReactMouseEvent<HTMLElement>) {
+    if (openLinkFromCommandClick(event)) {
+      return;
+    }
+
     const target = event.target instanceof HTMLElement ? event.target : null;
     const checkbox = target?.closest('[role="checkbox"][aria-checked]');
     if (!(checkbox instanceof HTMLElement)) {

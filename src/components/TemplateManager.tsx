@@ -7,7 +7,14 @@ import {
   MDXEditor,
   type MDXEditorMethods
 } from '@mdxeditor/editor';
-import { useEffect, useRef, type CSSProperties, type FocusEvent, type PointerEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  type CSSProperties,
+  type FocusEvent,
+  type MouseEvent,
+  type PointerEvent
+} from 'react';
 import {
   getNoteTemplateCompletion,
   sortNoteTemplatesByName,
@@ -16,6 +23,7 @@ import {
 import { normalizeSupportedMarkdown } from '../domain/note';
 import { syncNormalizedEditorMarkdown } from './editorMarkdownSync';
 import { installMdxEditorFloatingUiFixes, isMdxEditorFloatingUiElement } from './editorFloatingUi';
+import { openLinkFromCommandClick } from './editorLinkInteraction';
 import { mdxEditorSelectionPlugin } from './mdxEditorSelectionPlugin';
 
 type TemplateManagerProps = {
@@ -307,6 +315,7 @@ export function TemplateManager({
                 ref={editorShellRef}
                 className="editor-shell"
                 onBlurCapture={handleEditorBlur}
+                onClickCapture={handleEditorClick}
                 onPasteCapture={handleEditorPaste}
               >
                 <MDXEditor
@@ -333,6 +342,10 @@ export function TemplateManager({
 
     syncSelectedTemplateMarkdown();
     onFlush();
+  }
+
+  function handleEditorClick(event: MouseEvent<HTMLElement>) {
+    openLinkFromCommandClick(event);
   }
 
   function handleEditorPaste() {

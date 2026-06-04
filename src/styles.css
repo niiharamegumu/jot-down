@@ -926,6 +926,10 @@ h2 {
   display: none;
 }
 
+[data-editor-link-dialog-hidden] {
+  display: none !important;
+}
+
 .jot-editor ul {
   padding-left: 1.4rem;
 }
