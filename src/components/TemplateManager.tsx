@@ -13,7 +13,8 @@ import {
   type CSSProperties,
   type FocusEvent,
   type MouseEvent,
-  type PointerEvent
+  type PointerEvent,
+  type Ref
 } from 'react';
 import {
   getNoteTemplateCompletion,
@@ -36,6 +37,7 @@ type TemplateManagerProps = {
   isListNavCollapsed: boolean;
   isListNavPeeking: boolean;
   isResizingSidebar: boolean;
+  listNavRef?: Ref<HTMLElement>;
   storageError: string | null;
   onCreateTemplate: () => void;
   onSelectTemplate: (templateId: string) => void;
@@ -72,6 +74,7 @@ export function TemplateManager({
   isListNavCollapsed,
   isListNavPeeking,
   isResizingSidebar,
+  listNavRef,
   storageError,
   onCreateTemplate,
   onSelectTemplate,
@@ -127,6 +130,7 @@ export function TemplateManager({
       ) : null}
       {showTemplateList ? (
         <aside
+          ref={listNavRef}
           className={`template-sidebar${isListNavCollapsed ? ' template-sidebar--collapsed' : ''}`}
           aria-label="テンプレート一覧"
           onMouseLeave={onHideListNavPeek}
