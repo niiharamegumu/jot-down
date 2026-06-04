@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { EditorPane } from './components/EditorPane';
 import { NoteList } from './components/NoteList';
@@ -64,6 +64,7 @@ export function App() {
   const [isInstalledPwa, setIsInstalledPwa] = useState(() => isRunningAsInstalledPwa());
   const [isApplyingAppUpdate, setIsApplyingAppUpdate] = useState(false);
   const shellRef = useRef<HTMLDivElement>(null);
+  const listNavElementRef = useRef<HTMLElement | null>(null);
   const resizePointerIdRef = useRef<number | null>(null);
   const serviceWorkerRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const {
@@ -190,6 +191,80 @@ export function App() {
     mediaQuery.addEventListener('change', updateSmallScreenState);
 
     return () => mediaQuery.removeEventListener('change', updateSmallScreenState);
+  }, []);
+
+  useEffect(() => {
+    if (!isListNavPeeking || !effectiveListNavCollapsed) {
+      return;
+    }
+
+    function hideListNavPeek() {
+      setIsListNavPeeking(false);
+    }
+
+    function isPointerInsideListNav(event: globalThis.PointerEvent) {
+      const listNavElement = listNavElementRef.current;
+
+      if (!listNavElement) {
+        return false;
+      }
+
+      const rect = listNavElement.getBoundingClientRect();
+
+      return (
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom
+      );
+    }
+
+    function isPointerInsidePeekZone(event: globalThis.PointerEvent) {
+      return (
+        event.clientX >= 0 &&
+        event.clientX <= 32 &&
+        event.clientY >= 0 &&
+        event.clientY <= window.innerHeight
+      );
+    }
+
+    function handlePointerMove(event: globalThis.PointerEvent) {
+      if (isPointerInsideListNav(event) || isPointerInsidePeekZone(event)) {
+        return;
+      }
+
+      hideListNavPeek();
+    }
+
+    function handlePointerOut(event: globalThis.PointerEvent) {
+      if (event.relatedTarget === null) {
+        hideListNavPeek();
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        hideListNavPeek();
+      }
+    }
+
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerout', handlePointerOut);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', hideListNavPeek);
+    window.addEventListener('pointercancel', hideListNavPeek);
+
+    return () => {
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerout', handlePointerOut);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', hideListNavPeek);
+      window.removeEventListener('pointercancel', hideListNavPeek);
+    };
+  }, [effectiveListNavCollapsed, isListNavPeeking]);
+
+  const setListNavElementRef = useCallback((element: HTMLElement | null) => {
+    listNavElementRef.current = element;
   }, []);
 
   function updateNotes(nextNote: Note) {
@@ -564,6 +639,7 @@ export function App() {
         isListNavCollapsed={effectiveListNavCollapsed}
         isListNavPeeking={isListNavPeeking}
         isResizingSidebar={isResizingSidebar}
+        listNavRef={setListNavElementRef}
         storageError={storageError}
         onCreateTemplate={handleCreateTemplate}
         onSelectTemplate={handleSelectTemplate}
@@ -613,6 +689,7 @@ export function App() {
         query={query}
         canToggleListNav={canToggleListNav}
         isListNavCollapsed={effectiveListNavCollapsed}
+        listNavRef={setListNavElementRef}
         onQueryChange={handleQueryChange}
         onCreateNote={handleCreateNote}
         onSelectNote={handleSelectNote}

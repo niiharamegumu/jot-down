@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import type { Note } from '../domain/note';
 import { deriveNoteSnippet, deriveNoteTitle } from '../domain/note';
 
@@ -9,6 +10,7 @@ type NoteListProps = {
   query: string;
   canToggleListNav: boolean;
   isListNavCollapsed: boolean;
+  listNavRef?: Ref<HTMLElement>;
   onQueryChange: (query: string) => void;
   onCreateNote: () => void;
   onSelectNote: (noteId: string) => void;
@@ -36,6 +38,7 @@ export function NoteList({
   query,
   canToggleListNav,
   isListNavCollapsed,
+  listNavRef,
   onQueryChange,
   onCreateNote,
   onSelectNote,
@@ -51,6 +54,7 @@ export function NoteList({
 
   return (
     <aside
+      ref={listNavRef}
       className={`note-list${isListNavCollapsed ? ' note-list--collapsed' : ''}`}
       aria-label="Notes"
       onMouseLeave={onHideListNavPeek}

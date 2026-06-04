@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -293,6 +293,63 @@ describe('App', () => {
     expect(window.localStorage.getItem('jot-down-list-nav-collapsed')).toBe('true');
   });
 
+  it('hides peeking list navigation when the pointer leaves the visible list area', async () => {
+    const user = userEvent.setup();
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'note',
+        markdown: '# 既存',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      }
+    ]);
+    loadNoteTemplatesMock.mockResolvedValue([]);
+    putNoteMock.mockResolvedValue();
+
+    render(<App />);
+
+    await screen.findByRole('option', { name: /既存/ });
+    await user.click(screen.getByRole('button', { name: 'Note一覧を閉じる' }));
+
+    const listNav = screen.getByRole('complementary', { name: 'Notes' });
+    vi.spyOn(listNav, 'getBoundingClientRect').mockReturnValue(
+      createDomRect({ left: 12, right: 372, top: 12, bottom: 780 })
+    );
+
+    fireEvent.mouseEnter(document.querySelector('.list-nav-peek-zone') as Element);
+
+    expect(document.querySelector('.app-shell--list-nav-peeking')).toBeInTheDocument();
+
+    fireEvent.pointerMove(document, { clientX: 420, clientY: 120 });
+
+    expect(document.querySelector('.app-shell--list-nav-peeking')).not.toBeInTheDocument();
+  });
+
+  it('hides peeking list navigation when the pointer leaves the viewport', async () => {
+    const user = userEvent.setup();
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'note',
+        markdown: '# 既存',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      }
+    ]);
+    loadNoteTemplatesMock.mockResolvedValue([]);
+    putNoteMock.mockResolvedValue();
+
+    render(<App />);
+
+    await screen.findByRole('option', { name: /既存/ });
+    await user.click(screen.getByRole('button', { name: 'Note一覧を閉じる' }));
+
+    fireEvent.mouseEnter(document.querySelector('.list-nav-peek-zone') as Element);
+
+    expect(document.querySelector('.app-shell--list-nav-peeking')).toBeInTheDocument();
+
+    fireEvent.pointerOut(document, { clientX: -1, clientY: 120, relatedTarget: null });
+
+    expect(document.querySelector('.app-shell--list-nav-peeking')).not.toBeInTheDocument();
+  });
+
   it('uses separate note template list and detail views on small screens without list navigation toggles', async () => {
     const user = userEvent.setup();
     const restoreMatchMedia = mockSmallScreen();
@@ -376,6 +433,30 @@ function mockSmallScreen() {
       value: originalMatchMedia
     });
   };
+}
+
+function createDomRect({
+  left,
+  right,
+  top,
+  bottom
+}: {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}): DOMRect {
+  return {
+    left,
+    right,
+    top,
+    bottom,
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+    toJSON: () => ({})
+  } as DOMRect;
 }
 
 function mockClipboard(writeText: (value: string) => Promise<void>) {
