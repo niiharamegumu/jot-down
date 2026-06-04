@@ -211,11 +211,11 @@ export function EditorPane({
               <span>行を下へ移動</span>
             </span>
             <span>
-              <kbd>⌘ + ⌥ + ↑</kbd>
+              <kbd>⌃ + ⌥ + ↑</kbd>
               <span>行を先頭へ移動</span>
             </span>
             <span>
-              <kbd>⌘ + ⌥ + ↓</kbd>
+              <kbd>⌃ + ⌥ + ↓</kbd>
               <span>行を末尾へ移動</span>
             </span>
             <span>
@@ -417,7 +417,7 @@ export function EditorPane({
   }
 
   function handleEditorShortcut(event: globalThis.KeyboardEvent) {
-    if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+    if (event.altKey && !event.metaKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
       moveSelectedNoteLine(event, getNoteLineMovementForShortcut(event));
       return;
     }
@@ -477,10 +477,10 @@ export function EditorPane({
 
   function getNoteLineMovementForShortcut(event: globalThis.KeyboardEvent): NoteLineMovement {
     if (event.key === 'ArrowUp') {
-      return event.metaKey ? 'start' : 'up';
+      return event.ctrlKey ? 'start' : 'up';
     }
 
-    return event.metaKey ? 'end' : 'down';
+    return event.ctrlKey ? 'end' : 'down';
   }
 
   function toggleTask(taskIndex: number, selectionSnapshot: TaskSelectionSnapshot | null = null) {

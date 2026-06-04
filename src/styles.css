@@ -200,6 +200,8 @@ button {
 }
 
 .editor-toolbar {
+  position: relative;
+  z-index: 30;
   display: grid;
   grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem 2.5rem 2.5rem 2.5rem 2.5rem;
   align-items: center;
@@ -366,11 +368,12 @@ h2 {
 
 .shortcut-help-button {
   color: var(--text);
+  z-index: 40;
 }
 
 .shortcut-help-button__tooltip {
   position: absolute;
-  z-index: 20;
+  z-index: 1000;
   top: calc(100% + 0.35rem);
   right: 0;
   display: grid;
