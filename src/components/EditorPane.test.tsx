@@ -62,7 +62,7 @@ vi.mock('@mdxeditor/editor', async () => {
                 return <li key={`${line}-${index}`}>{listItem[1]}</li>;
               }
 
-              return <p key={`${line}-${index}`}>{line}</p>;
+              return <p key={`${line}-${index}`}>{renderInlineMarkdown(line)}</p>;
             }
 
             return (
@@ -746,6 +746,24 @@ describe('EditorPane', () => {
     expect(onMarkdownChange).toHaveBeenCalledWith(normalizedMarkdown);
   });
 
+  it('opens a link with command click', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    renderEditor({ markdown: '[MDXEditor](https://mdxeditor.dev/)' });
+
+    fireEvent.click(screen.getByRole('link', { name: 'MDXEditor' }), { metaKey: true });
+
+    expect(open).toHaveBeenCalledWith('https://mdxeditor.dev/', '_blank', 'noopener,noreferrer');
+  });
+
+  it('keeps regular link clicks inside the editor', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    renderEditor({ markdown: '[MDXEditor](https://mdxeditor.dev/)' });
+
+    fireEvent.click(screen.getByRole('link', { name: 'MDXEditor' }));
+
+    expect(open).not.toHaveBeenCalled();
+  });
+
   it('flushes note changes when editing focus leaves the editor', () => {
     const onFlush = vi.fn();
     renderEditor({ onFlush });
@@ -887,6 +905,8 @@ describe('EditorPane', () => {
     expect(screen.getByText('行を上へ移動')).toBeInTheDocument();
     expect(screen.getByText('⌥ + ↓')).toBeInTheDocument();
     expect(screen.getByText('行を下へ移動')).toBeInTheDocument();
+    expect(screen.getByText('⌘ + クリック')).toBeInTheDocument();
+    expect(screen.getByText('リンクを開く')).toBeInTheDocument();
   });
 });
 
@@ -952,6 +972,24 @@ function selectText(node: ChildNode | null) {
   const selection = window.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(range);
+}
+
+function renderInlineMarkdown(line: string) {
+  const link = line.match(/^(.*)\[([^\]]+)\]\(([^)]+)\)(.*)$/);
+  if (!link) {
+    return line;
+  }
+
+  const [, before, text, href, after] = link;
+  return (
+    <>
+      {before}
+      <a href={href} onClick={(event) => event.preventDefault()}>
+        {text}
+      </a>
+      {after}
+    </>
+  );
 }
 
 function selectTextRange(
