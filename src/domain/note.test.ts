@@ -141,9 +141,17 @@ describe('Note line movement', () => {
     expect(moveNoteLine('A\nB\nC', 1, 'down')).toBe('A\nC\nB');
   });
 
+  it('moves the selected note line to the start or end', () => {
+    expect(moveNoteLine('A\nB\nC', 1, 'start')).toBe('B\nA\nC');
+    expect(moveNoteLine('A\nB\nC', 1, 'end')).toBe('A\nC\nB');
+    expect(moveNoteLine('A\nB\nC\nD', 1, 'end')).toBe('A\nC\nD\nB');
+  });
+
   it('leaves note text unchanged at movement boundaries', () => {
     expect(moveNoteLine('A\nB', 0, 'up')).toBe('A\nB');
     expect(moveNoteLine('A\nB', 1, 'down')).toBe('A\nB');
+    expect(moveNoteLine('A\nB', 0, 'start')).toBe('A\nB');
+    expect(moveNoteLine('A\nB', 1, 'end')).toBe('A\nB');
     expect(moveNoteLine('A\nB', 4, 'down')).toBe('A\nB');
   });
 
@@ -165,6 +173,7 @@ describe('Note line movement', () => {
   it('skips blank note lines when moving non-empty note lines', () => {
     expect(moveNoteLine('A\n\nB', 2, 'up')).toBe('B\n\nA');
     expect(moveNoteLine('A\n\nB', 0, 'down')).toBe('B\n\nA');
+    expect(moveNoteLine('A\n\nB\nC', 0, 'end')).toBe('B\n\nC\nA');
   });
 
   it('returns the non-blank target line index for note line movement', () => {
@@ -206,6 +215,12 @@ describe('Note line movement', () => {
     );
     expect(moveNoteLines('A\nB\nC\nD', { startLineIndex: 1, endLineIndex: 2 }, 'up')).toBe(
       'B\nC\nA\nD'
+    );
+    expect(moveNoteLines('A\nB\nC\nD', { startLineIndex: 1, endLineIndex: 2 }, 'start')).toBe(
+      'B\nC\nA\nD'
+    );
+    expect(moveNoteLines('A\nB\nC\nD', { startLineIndex: 1, endLineIndex: 2 }, 'end')).toBe(
+      'A\nD\nB\nC'
     );
   });
 

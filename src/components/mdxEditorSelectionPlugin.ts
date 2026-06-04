@@ -75,8 +75,7 @@ export function selectMdxEditorTextOffset(scope: HTMLElement, offset: number): b
     return false;
   }
 
-  selectTextOffsetInEditor(editor, scope, offset);
-  return true;
+  return selectTextOffsetInEditor(editor, scope, offset);
 }
 
 export function selectMdxEditorTextRange(
@@ -95,8 +94,7 @@ export function selectMdxEditorTextRange(
     return false;
   }
 
-  selectTextRangeInEditor(editor, startScope, startOffset, endScope, endOffset);
-  return true;
+  return selectTextRangeInEditor(editor, startScope, startOffset, endScope, endOffset);
 }
 
 export function getSelectedMdxEditorElement(
@@ -177,8 +175,14 @@ export function isTaskCheckboxHit(checkbox: HTMLElement, clientX: number): boole
   return clickX >= 0 && clickX <= taskCheckboxHitAreaWidthPx;
 }
 
-function selectTextOffsetInEditor(editor: LexicalEditor, scope: HTMLElement, offset: number) {
+function selectTextOffsetInEditor(
+  editor: LexicalEditor,
+  scope: HTMLElement,
+  offset: number
+): boolean {
   const position = findTextPosition(scope, offset);
+  let selected = false;
+  focusEditorRootWithoutScrolling(editor);
   editor.update(
     () => {
       const lexicalNode =
@@ -190,13 +194,15 @@ function selectTextOffsetInEditor(editor: LexicalEditor, scope: HTMLElement, off
       if ($isTextNode(lexicalNode)) {
         const boundedOffset = Math.min(position.offset, lexicalNode.getTextContentSize());
         lexicalNode.select(boundedOffset, boundedOffset);
+        selected = true;
       } else if ($isElementNode(lexicalNode)) {
         lexicalNode.selectStart();
+        selected = true;
       }
     },
     { discrete: true }
   );
-  editor.focus();
+  return selected;
 }
 
 function selectTextRangeInEditor(
@@ -205,9 +211,11 @@ function selectTextRangeInEditor(
   startOffset: number,
   endScope: HTMLElement,
   endOffset: number
-) {
+): boolean {
   const startPosition = findTextPosition(startScope, startOffset);
   const endPosition = findTextPosition(endScope, endOffset);
+  let selected = false;
+  focusEditorRootWithoutScrolling(editor);
 
   editor.update(
     () => {
@@ -221,10 +229,20 @@ function selectTextRangeInEditor(
       selection.anchor.set(startPoint.key, startPoint.offset, startPoint.type);
       selection.focus.set(endPoint.key, endPoint.offset, endPoint.type);
       $setSelection(selection);
+      selected = true;
     },
     { discrete: true }
   );
-  editor.focus();
+  return selected;
+}
+
+function focusEditorRootWithoutScrolling(editor: LexicalEditor) {
+  const root = editor.getRootElement();
+  try {
+    root?.focus({ preventScroll: true });
+  } catch {
+    root?.focus();
+  }
 }
 
 function getLexicalSelectionPoint(

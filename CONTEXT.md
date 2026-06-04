@@ -33,7 +33,7 @@ A single Markdown line inside a note's text, treated as one selectable writing u
 _Avoid_: Visual row, task object, block record
 
 **Note line movement**:
-A keyboard-driven note edit that moves the current non-empty note line, or every note line touched by a text selection range, earlier or later within the same note text while skipping blank lines as spacing. Multiple note lines touched by one text selection range move together as one ordered group. Moving a list item also moves its indented continuation lines, such as a following Markdown link line, as the same writing unit. Moving a line only changes its position; indentation, parent-child-looking Markdown, and task checked state remain part of the moved Markdown text.
+A keyboard-driven note edit that moves the current non-empty note line, or every note line touched by a text selection range, elsewhere within the same note text while skipping blank lines as spacing. Multiple note lines touched by one text selection range move together as one ordered group. Moving a list item also moves its indented continuation lines, such as a following Markdown link line, as the same writing unit. Moving a line only changes its position; indentation, parent-child-looking Markdown, and task checked state remain part of the moved Markdown text.
 _Avoid_: Drag sorting, task sorting, toolbar reorder action, moving a task object
 
 **Note deletion**:

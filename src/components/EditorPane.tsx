@@ -21,7 +21,8 @@ import {
   getNoteLineMovementTargetRange,
   moveNoteLines,
   normalizeSupportedMarkdown,
-  toggleTaskAtIndex
+  toggleTaskAtIndex,
+  type NoteLineMovement
 } from '../domain/note';
 import type { NoteTemplate } from '../domain/noteTemplate';
 import {
@@ -98,6 +99,7 @@ export function EditorPane({
   const previousNoteIdRef = useRef<string | null>(null);
   const currentNoteIdRef = useRef<string | null>(null);
   const pendingProgrammaticMarkdownRef = useRef<string | null>(null);
+  const pendingNoteLineSelectionRef = useRef<NoteLineSelectionSnapshot | null>(null);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
@@ -117,6 +119,15 @@ export function EditorPane({
   useEffect(() => installMdxEditorFloatingUiFixes(), []);
 
   useEffect(() => {
+    const snapshot = pendingNoteLineSelectionRef.current;
+    if (!snapshot || snapshot.noteId !== note?.id || snapshot.markdown !== markdown) {
+      return;
+    }
+
+    scheduleNoteLineSelectionRestore(snapshot);
+  }, [markdown, note?.id]);
+
+  useEffect(() => {
     if (!note) {
       return;
     }
@@ -134,10 +145,12 @@ export function EditorPane({
   useEffect(() => {
     if (!note) {
       previousNoteIdRef.current = null;
+      pendingNoteLineSelectionRef.current = null;
       return;
     }
 
     if (previousNoteIdRef.current !== note.id) {
+      pendingNoteLineSelectionRef.current = null;
       pendingProgrammaticMarkdownRef.current = markdown;
       editorRef.current?.setMarkdown(toEditorMarkdown(markdown));
       previousNoteIdRef.current = note.id;
@@ -196,6 +209,14 @@ export function EditorPane({
             <span>
               <kbd>⌥ + ↓</kbd>
               <span>行を下へ移動</span>
+            </span>
+            <span>
+              <kbd>⌘ + ⌥ + ↑</kbd>
+              <span>行を先頭へ移動</span>
+            </span>
+            <span>
+              <kbd>⌘ + ⌥ + ↓</kbd>
+              <span>行を末尾へ移動</span>
             </span>
             <span>
               <kbd>⌘ + クリック</kbd>
@@ -396,8 +417,8 @@ export function EditorPane({
   }
 
   function handleEditorShortcut(event: globalThis.KeyboardEvent) {
-    if (!event.metaKey && event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-      moveSelectedNoteLine(event, event.key === 'ArrowUp' ? 'up' : 'down');
+    if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      moveSelectedNoteLine(event, getNoteLineMovementForShortcut(event));
       return;
     }
 
@@ -454,6 +475,14 @@ export function EditorPane({
     return checkboxes.indexOf(checkbox);
   }
 
+  function getNoteLineMovementForShortcut(event: globalThis.KeyboardEvent): NoteLineMovement {
+    if (event.key === 'ArrowUp') {
+      return event.metaKey ? 'start' : 'up';
+    }
+
+    return event.metaKey ? 'end' : 'down';
+  }
+
   function toggleTask(taskIndex: number, selectionSnapshot: TaskSelectionSnapshot | null = null) {
     const nextMarkdown = normalizeSupportedMarkdown(toggleTaskAtIndex(markdown, taskIndex));
     applyProgrammaticMarkdownChange(nextMarkdown);
@@ -463,7 +492,7 @@ export function EditorPane({
     }
   }
 
-  function moveSelectedNoteLine(event: globalThis.KeyboardEvent, direction: 'up' | 'down') {
+  function moveSelectedNoteLine(event: globalThis.KeyboardEvent, movement: NoteLineMovement) {
     const editorRoot = getEditorRoot();
     if (!editorRoot) {
       return;
@@ -479,12 +508,12 @@ export function EditorPane({
     event.stopPropagation();
     event.stopImmediatePropagation();
 
-    const targetLineRange = getNoteLineMovementTargetRange(currentMarkdown, lineRange, direction);
+    const targetLineRange = getNoteLineMovementTargetRange(currentMarkdown, lineRange, movement);
     if (!targetLineRange) {
       return;
     }
 
-    const nextMarkdown = moveNoteLines(currentMarkdown, lineRange, direction);
+    const nextMarkdown = moveNoteLines(currentMarkdown, lineRange, movement);
     if (nextMarkdown === currentMarkdown) {
       const selectionSnapshot = captureNoteLineRangeSelectionSnapshot(
         activeNoteId,
@@ -494,7 +523,9 @@ export function EditorPane({
       );
 
       if (selectionSnapshot) {
-        window.requestAnimationFrame(() => restoreNoteLineSelection(selectionSnapshot));
+        scheduleNoteLineSelectionRestore(
+          withSelectionRevealForJumpMovement(selectionSnapshot, movement)
+        );
       }
 
       return;
@@ -506,11 +537,15 @@ export function EditorPane({
       editorRoot,
       nextMarkdown
     );
-    applyProgrammaticMarkdownChange(nextMarkdown);
 
     if (selectionSnapshot) {
-      window.requestAnimationFrame(() => restoreNoteLineSelection(selectionSnapshot));
+      pendingNoteLineSelectionRef.current = withSelectionRevealForJumpMovement(
+        selectionSnapshot,
+        movement
+      );
     }
+
+    applyProgrammaticMarkdownChange(nextMarkdown);
   }
 
   function handleMarkdownChange(nextMarkdown: string) {
@@ -616,8 +651,52 @@ export function EditorPane({
     );
   }
 
-  function restoreNoteLineSelection(snapshot: NoteLineSelectionSnapshot) {
-    restoreNoteLineSelectionSnapshot(snapshot, () => currentNoteIdRef.current, getEditorRoot());
+  function restoreNoteLineSelection(snapshot: NoteLineSelectionSnapshot): boolean {
+    return restoreNoteLineSelectionSnapshot(
+      snapshot,
+      () => currentNoteIdRef.current,
+      getEditorRoot()
+    );
+  }
+
+  function withSelectionRevealForJumpMovement(
+    snapshot: NoteLineSelectionSnapshot,
+    movement: NoteLineMovement
+  ): NoteLineSelectionSnapshot {
+    if (movement !== 'start' && movement !== 'end') {
+      return snapshot;
+    }
+
+    return { ...snapshot, revealSelection: true };
+  }
+
+  function scheduleNoteLineSelectionRestore(
+    snapshot: NoteLineSelectionSnapshot,
+    attemptsRemaining = 4,
+    stabilizationFramesRemaining = 2
+  ) {
+    window.requestAnimationFrame(() => {
+      if (pendingNoteLineSelectionRef.current && pendingNoteLineSelectionRef.current !== snapshot) {
+        return;
+      }
+
+      const restored = restoreNoteLineSelection(snapshot);
+      if (restored) {
+        if (pendingNoteLineSelectionRef.current === snapshot) {
+          if (stabilizationFramesRemaining > 0) {
+            scheduleNoteLineSelectionRestore(snapshot, 0, stabilizationFramesRemaining - 1);
+            return;
+          }
+
+          pendingNoteLineSelectionRef.current = null;
+        }
+        return;
+      }
+
+      if (attemptsRemaining > 0) {
+        scheduleNoteLineSelectionRestore(snapshot, attemptsRemaining - 1);
+      }
+    });
   }
 
   function applyProgrammaticMarkdownChange(nextMarkdown: string) {

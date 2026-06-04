@@ -22,6 +22,8 @@ export type NoteLineRange = {
   endLineIndex: number;
 };
 
+export type NoteLineMovement = 'up' | 'down' | 'start' | 'end';
+
 export function createNote(markdown = '', id: string = crypto.randomUUID()): Note {
   return {
     id,
@@ -115,36 +117,36 @@ export function toggleTaskAtIndex(markdown: string, taskIndex: number): string {
 export function moveNoteLine(
   markdown: string,
   lineIndex: number,
-  direction: 'up' | 'down'
+  movement: NoteLineMovement
 ): string {
-  return moveNoteLines(markdown, { startLineIndex: lineIndex, endLineIndex: lineIndex }, direction);
+  return moveNoteLines(markdown, { startLineIndex: lineIndex, endLineIndex: lineIndex }, movement);
 }
 
 export function moveNoteLines(
   markdown: string,
   lineRange: NoteLineRange,
-  direction: 'up' | 'down'
+  movement: NoteLineMovement
 ): string {
-  return getNoteLineMovement(markdown, lineRange, direction)?.markdown ?? markdown;
+  return getNoteLineMovement(markdown, lineRange, movement)?.markdown ?? markdown;
 }
 
 export function getNoteLineMovementTargetRange(
   markdown: string,
   lineRange: NoteLineRange,
-  direction: 'up' | 'down'
+  movement: NoteLineMovement
 ): NoteLineRange | null {
-  return getNoteLineMovement(markdown, lineRange, direction)?.range ?? null;
+  return getNoteLineMovement(markdown, lineRange, movement)?.range ?? null;
 }
 
 export function getNoteLineMovementTargetIndex(
   markdown: string,
   lineIndex: number,
-  direction: 'up' | 'down'
+  movement: NoteLineMovement
 ): number {
   const targetRange = getNoteLineMovementTargetRange(
     markdown,
     { startLineIndex: lineIndex, endLineIndex: lineIndex },
-    direction
+    movement
   );
   if (!targetRange) {
     return -1;
@@ -161,7 +163,7 @@ export function getNoteLineMovementTargetIndex(
 function getNoteLineMovement(
   markdown: string,
   lineRange: NoteLineRange,
-  direction: 'up' | 'down'
+  movement: NoteLineMovement
 ): { markdown: string; range: NoteLineRange } | null {
   const lines = markdown.split(/\r?\n/);
   const blocks = getMovableNoteBlocks(lines);
@@ -173,19 +175,21 @@ function getNoteLineMovement(
 
   const firstSelectedBlockIndex = selectedBlockIndexes[0];
   const lastSelectedBlockIndex = selectedBlockIndexes[selectedBlockIndexes.length - 1];
-  const targetBlockIndex =
-    direction === 'up' ? firstSelectedBlockIndex - 1 : lastSelectedBlockIndex + 1;
-
-  if (targetBlockIndex < 0 || targetBlockIndex >= blocks.length) {
-    return null;
-  }
-
   const selectedIndexSet = new Set(selectedBlockIndexes);
   const selectedBlocks = blocks.filter((_, index) => selectedIndexSet.has(index));
   const nextBlocks = blocks.filter((_, index) => !selectedIndexSet.has(index));
-  const targetBlock = blocks[targetBlockIndex];
-  const nextTargetBlockIndex = nextBlocks.indexOf(targetBlock);
-  const insertBlockIndex = direction === 'up' ? nextTargetBlockIndex : nextTargetBlockIndex + 1;
+  const insertBlockIndex = getNoteLineMovementInsertBlockIndex(
+    blocks,
+    nextBlocks,
+    selectedBlockIndexes,
+    firstSelectedBlockIndex,
+    lastSelectedBlockIndex,
+    movement
+  );
+
+  if (insertBlockIndex === null) {
+    return null;
+  }
 
   nextBlocks.splice(insertBlockIndex, 0, ...selectedBlocks);
 
@@ -221,6 +225,39 @@ function getNoteLineMovement(
       endLineIndex: Math.max(...selectedNextEnds) - 1
     }
   };
+}
+
+function getNoteLineMovementInsertBlockIndex(
+  blocks: MovableNoteBlock[],
+  nextBlocks: MovableNoteBlock[],
+  selectedBlockIndexes: number[],
+  firstSelectedBlockIndex: number,
+  lastSelectedBlockIndex: number,
+  movement: NoteLineMovement
+): number | null {
+  if (movement === 'start') {
+    return firstSelectedBlockIndex === 0 ? null : 0;
+  }
+
+  if (movement === 'end') {
+    return lastSelectedBlockIndex === blocks.length - 1 ? null : nextBlocks.length;
+  }
+
+  const targetBlockIndex =
+    movement === 'up' ? firstSelectedBlockIndex - 1 : lastSelectedBlockIndex + 1;
+
+  if (targetBlockIndex < 0 || targetBlockIndex >= blocks.length) {
+    return null;
+  }
+
+  const selectedIndexSet = new Set(selectedBlockIndexes);
+  if (selectedIndexSet.has(targetBlockIndex)) {
+    return null;
+  }
+
+  const targetBlock = blocks[targetBlockIndex];
+  const nextTargetBlockIndex = nextBlocks.indexOf(targetBlock);
+  return movement === 'up' ? nextTargetBlockIndex : nextTargetBlockIndex + 1;
 }
 
 function stripMarkdownChrome(value: string): string {
