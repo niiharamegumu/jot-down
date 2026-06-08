@@ -20,13 +20,25 @@ _Avoid_: Local folder, cloud sync, file vault, account, import/export
 The user-facing navigation area for moving between notes or between note templates. List navigation may be opened or closed as a local display preference only when the layout can keep list and detail visible as separate regions; on small-screen layouts it is a separate list view rather than a collapsible region. Closing it does not change note order, note search, note template management, or the selected note or note template.
 _Avoid_: Folder tree, file explorer, notebook switcher
 
+**Last open note**:
+The note the user most recently had open for editing on the current device. Restoring the last open note is a local display preference and does not change note order or note updated time. If the last open note no longer exists, the app opens the most recently edited note instead. If the restored note belongs to a closed note folder group, that group opens so the restored note is visible in list navigation.
+_Avoid_: Last edited note, pinned note, default note
+
 **Markdown live editing**:
 A single editing surface where Markdown text remains the source of truth while task markers and headings are visually structured in place as the user types. Editing behavior follows the Markdown editor's native list and task semantics rather than preserving app-specific empty task states, while focused blocks must keep their visual scale and layout stable enough that cursor placement does not cause distracting typography or position shifts.
 _Avoid_: Separate preview, rendered-only document, edit/preview mode, layout-shifting focus state, block-type menu
 
+**Editor shortcut help**:
+A supplemental note editor control that shows available keyboard and pointer shortcuts without changing note content. Editor shortcut help belongs outside the primary note toolbar so the toolbar remains focused on note actions.
+_Avoid_: Note action, formatting toolbar, settings
+
 **Note**:
 The user-facing unit of writing. A user can have multiple notes, and each note contains Markdown text, including any tasks written inside it.
 _Avoid_: Document, page, list
+
+**Note creation**:
+An action that creates a new note in the user's current note list context. Creating a note from within a note folder group places it in that note folder; creating a note from outside a note folder group creates an unfiled note.
+_Avoid_: File creation, template application
 
 **Note line**:
 A single Markdown line inside a note's text, treated as one selectable writing unit even when it wraps visually in the editor. A task is a note line whose checked state is part of that line's Markdown text. When a list item has indented continuation lines, those continuation lines remain attached to the list item during note line movement.
@@ -37,20 +49,56 @@ A keyboard-driven note edit that moves the current non-empty note line, or every
 _Avoid_: Drag sorting, task sorting, toolbar reorder action, moving a task object
 
 **Note deletion**:
-A confirmed action that removes a note from the local note store without creating a separate recoverable place for it. Empty notes remain until explicitly deleted, deletion confirmation must make the lack of recovery clear, and deleting the active note should leave another note ready for writing.
+A confirmed action that removes a note from the local note store without creating a separate recoverable place for it. Empty notes remain until explicitly deleted, deletion confirmation must make the lack of recovery clear, and deleting the active note should leave another note ready for writing. If deletion removes every note, the app creates a starter note.
 _Avoid_: Trash, archive
 
 **Deletion target note**:
-A note that the user has marked for a future deletion action without necessarily opening it for editing. Deletion target selection is separate from the currently open note, and marking a note as a deletion target does not change note content or note order.
+A visible note that the user has marked for a future deletion action without necessarily opening it for editing. Deletion target selection is separate from the currently open note, and marking a note as a deletion target does not change note content or note order. Notes inside a closed note folder group can become deletion target notes only after the group is opened and the notes are visible.
 _Avoid_: Selected note, active note, checked task, queued deletion
 
+**Deletion target note folder**:
+A note folder chosen from its note folder group menu for a future deletion action. Deleting a deletion target note folder also deletes the notes that belong to it, but note folders are not mixed into deletion target note selection.
+_Avoid_: Deletion target note, unfiled conversion, archive, bulk note selection
+
 **Note duplication**:
-An action that creates a separate note with the same Markdown text as an existing note. The duplicate is a normal note immediately after creation and does not retain a relationship to the original note.
+An action that creates a separate note with the same Markdown text and note folder membership as an existing note. The duplicate is a normal note immediately after creation and does not retain a relationship to the original note.
 _Avoid_: Clone link, version, fork, copy marker
 
 **Note Markdown copy**:
 An action that places the currently open note's Markdown text on the system clipboard without creating, changing, or saving a note. The copied text is the note text itself, including any unsaved visible edits.
 _Avoid_: Note duplication, export, share, rendered copy
+
+**Note folder**:
+A flat, user-managed classification that can contain notes while the notes remain in the local note store. A note may belong to zero or one note folder; a note with no note folder is unfiled and remains visible alongside note folders rather than in a dedicated unfiled view. Existing notes without note folder membership are treated as unfiled. Note folder membership is separate from note Markdown and does not apply to note templates. A note folder is not a device folder, Markdown file directory, nested hierarchy, or synced storage location.
+_Avoid_: Local folder, file directory, folder tree, notebook, tag, template folder
+
+**Note folder management**:
+The note list actions for creating, renaming, and deleting note folders without leaving list navigation. A note folder can be created empty, or created as part of moving the current note into a new note folder. Note folder management is not a separate settings screen or note template management area.
+_Avoid_: Folder settings, folder administration, template management
+
+**Note folder group**:
+A note list grouping for one note folder and the notes that belong to it. Note folder groups are shown by note folder name order, using case-insensitive Japanese locale ordering, followed by unfiled notes in note order. A newly created note folder group starts open, and an empty note folder group remains visible in normal list navigation. A note folder group may be opened or closed as local display state only; closing it hides contained notes in list navigation without changing note order, note search, or note folder membership. During note search, matching notes inside closed note folder groups are shown by temporarily opening those groups, note folder groups with no matching notes are hidden, and clearing search restores the user's prior open or closed display state. Note folder groups sit alongside unfiled notes in list navigation rather than replacing the note list with separate all-notes or unfiled views.
+_Avoid_: Folder tree, file explorer, notebook section
+
+**Note folder membership change**:
+An action that changes which note folder one or more notes belong to, or makes notes unfiled, without changing the notes' Markdown text. A note folder membership change is not a note edit and does not change note updated time. Users can change membership from a note menu, by creating a note inside a note folder group, or by dragging one visible note, or multiple selected visible notes from the same list level, into a note folder group or out to the unfiled area. The same list level means notes in the same note folder group, or notes in the unfiled area; notes from different note folder groups or from both a note folder group and the unfiled area are not dragged together as one membership change. Dropping notes on a closed note folder group changes membership without opening that group, unless opening it is required to keep the last open note visible.
+_Avoid_: Note edit, moving Markdown, folder-defined order, manual sort order
+
+**Membership change selection**:
+A temporary selection of visible notes used for moving multiple notes between note folders or to the unfiled area. Membership change selection is separate from deletion target selection and does not prepare notes for deletion.
+_Avoid_: Deletion target note, selected for deletion, active note
+
+**Unfiled drop area**:
+A persistent drop target below note folder groups where notes can be moved to have no note folder. The unfiled drop area is not a separate unfiled view and remains available even when there are no unfiled notes.
+_Avoid_: Unfiled folder, all notes view, trash
+
+**Note folder deletion**:
+A confirmed action that removes a note folder and deletes the notes that belong to it from the local note store. Note folder deletion includes note deletion for contained notes, and its confirmation should show the note folder name and the number of notes that will be deleted. If note folder deletion removes the open note, the app opens the remaining most recently edited note.
+_Avoid_: Unfiled conversion, archive, trash
+
+**Note folder name**:
+The unique, non-empty user-entered label used to identify a note folder after trimming surrounding whitespace. Note folder name uniqueness ignores letter case but does not normalize full-width and half-width characters. Unlike a note title, a note folder name is separate from note Markdown and is not derived from the notes it contains. Changing a note folder name does not change contained notes, their note updated time, or the note folder group's open or closed display state.
+_Avoid_: Note title, filename, heading-derived name
 
 **Note title**:
 The display name of a note, derived from the first heading of any level in the note's Markdown text, or from the first non-empty line when no heading exists. A note with no usable non-whitespace text is shown as untitled without storing that as note content.
@@ -61,7 +109,7 @@ A reusable Markdown pattern kept outside the note list and used as starting or i
 _Avoid_: Starter note, document template, snippet
 
 **Note template application**:
-The act of turning a note template into note Markdown, either as the initial text of a new note or as text inserted unchanged at the current cursor position inside an existing note. Applying a note template is a note edit, not a relationship that remains attached to the note.
+The act of turning a note template into note Markdown, either as the initial text of a new unfiled note or as text inserted unchanged at the current cursor position inside an existing note. Applying a note template is a note edit, not a relationship that remains attached to the note.
 _Avoid_: Template binding, template instance, note type
 
 **Note template management**:
@@ -77,19 +125,19 @@ The user-visible recency signal for a note, reflecting when the note's Markdown 
 _Avoid_: Created time as primary note metadata
 
 **Note order**:
-The order in which notes are shown to the user, based on recent editing rather than manual arrangement.
-_Avoid_: Manual sort order, pinned notes, folders, tags
+The order in which notes are shown to the user, based on recent editing rather than manual arrangement. Notes keep this order within each note folder group and among unfiled notes.
+_Avoid_: Manual sort order, pinned notes, folder-defined order, tags
 
 **Note search**:
-A way to find notes by case-insensitive partial text matching inside their Markdown content. Search is note-oriented, not a separate task lookup, and matching notes keep the normal note order.
-_Avoid_: Task search, structured query, fuzzy search
+A way to find notes by case-insensitive partial text matching inside their Markdown content. Search is note-oriented, not a separate task lookup or note folder name lookup, and matching notes keep the normal note folder groups and note order.
+_Avoid_: Task search, note folder search, structured query, fuzzy search
 
 **Note snippet**:
 A short preview of a note's Markdown text used to help identify the note in a list.
 _Avoid_: Task summary, generated description
 
 **Offline use**:
-The expectation that the app's note creation, editing, checking, searching, deletion, note template management, and note template application behavior works without a network connection.
+The expectation that the app's note creation, editing, checking, searching, deletion, note folder management, note folder membership changes, local display preferences, note template management, and note template application behavior works without a network connection.
 _Avoid_: App-shell-only offline mode
 
 **Supported Markdown**:

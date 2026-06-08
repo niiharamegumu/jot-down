@@ -1,0 +1,3 @@
+# Keep note folders as list classification
+
+Jot Down will model note folders as flat, user-managed note classifications outside note Markdown rather than as Markdown metadata, tags, local file directories, or nested folder trees. Existing notes without folder membership are treated as unfiled instead of inferring folders from note text. This keeps folder membership from becoming a note edit, preserves recent-edit ordering, and lets the note list group notes without changing Markdown as the source of writing truth. Deleting a note folder intentionally deletes the notes it contains, so folder deletion must be confirmed as a destructive action showing the folder name and contained note count.

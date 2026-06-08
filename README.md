@@ -99,7 +99,7 @@ checks before deploying with `wrangler deploy`.
 - User accounts
 - Cloud sync
 - Import / export
-- Folders, tags, and pinned notes
+- Tags and pinned notes
 - Due dates, reminders, and notifications
 - Separate preview mode
 - App-specific settings screen
