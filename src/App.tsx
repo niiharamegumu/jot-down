@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { EditorPane } from './components/EditorPane';
 import { NoteList } from './components/NoteList';
 import { TemplateManager } from './components/TemplateManager';
 import {
   deleteNote,
+  deleteNoteFolderAndNotes,
   deleteNotes,
   deleteNoteTemplate,
+  loadNoteFolders,
   loadNotes,
   loadNoteTemplates,
   putNote,
+  putNoteFolder,
+  putNotes,
   putNoteTemplate
 } from './data/notesDb';
 import {
@@ -21,11 +25,25 @@ import {
   type Note
 } from './domain/note';
 import {
+  createNoteFolder,
+  isUniqueNoteFolderName,
+  isValidNoteFolderName,
+  normalizeNoteFolderName,
+  sortNoteFoldersByName,
+  type NoteFolder
+} from './domain/noteFolder';
+import {
   createNoteTemplate,
   getApplicableNoteTemplates,
   sortNoteTemplatesByName,
   type NoteTemplate
 } from './domain/noteTemplate';
+
+type NoteFolderEditorState = {
+  folderId: string | null;
+  name: string;
+  error: string | null;
+};
 
 const starterMarkdown = `# 今日やること
 
@@ -37,16 +55,24 @@ const starterMarkdown = `# 今日やること
 const starterNoteId = 'starter-note';
 const sidebarWidthStorageKey = 'jot-down-sidebar-width';
 const listNavCollapsedStorageKey = 'jot-down-list-nav-collapsed';
+const noteFolderOpenStorageKey = 'jot-down-note-folder-open-ids';
+const lastOpenNoteStorageKey = 'jot-down-last-open-note-id';
 const smallScreenMediaQuery = '(max-width: 760px)';
 const minSidebarWidth = 260;
 const maxSidebarWidth = 520;
 
 export function App() {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [noteFolders, setNoteFolders] = useState<NoteFolder[]>([]);
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplate[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [deletionTargetNoteIds, setDeletionTargetNoteIds] = useState<string[]>([]);
+  const [membershipChangeNoteIds, setMembershipChangeNoteIds] = useState<string[]>([]);
+  const [draggedNoteIds, setDraggedNoteIds] = useState<string[]>([]);
+  const [currentNoteListFolderId, setCurrentNoteListFolderId] = useState<string | null>(null);
+  const [openNoteFolderIds, setOpenNoteFolderIds] = useState(() => loadOpenNoteFolderIds());
+  const [noteFolderEditor, setNoteFolderEditor] = useState<NoteFolderEditorState | null>(null);
   const [isDeletionTargetSelectionMode, setIsDeletionTargetSelectionMode] = useState(false);
   const [activeMarkdown, setActiveMarkdown] = useState('');
   const [activeTemplateName, setActiveTemplateName] = useState('');
@@ -79,6 +105,10 @@ export function App() {
   const selectedNote = notes.find((note) => note.id === selectedNoteId) ?? null;
   const selectedTemplate =
     noteTemplates.find((template) => template.id === selectedTemplateId) ?? null;
+  const noteFolderIdSet = useMemo(
+    () => new Set(noteFolders.map((folder) => folder.id)),
+    [noteFolders]
+  );
   const visibleNotes = sortNotesByUpdatedTime(notes).filter((note) =>
     matchesNoteSearch(note, query)
   );
@@ -91,8 +121,11 @@ export function App() {
 
     async function boot() {
       try {
-        const loadedNotes = await loadNotes();
-        const loadedTemplates = await loadNoteTemplates();
+        const [loadedNotes, loadedFolders, loadedTemplates] = await Promise.all([
+          loadNotes(),
+          loadNoteFolders(),
+          loadNoteTemplates()
+        ]);
         const initialNotes =
           loadedNotes.length > 0 ? loadedNotes : [createNote(starterMarkdown, starterNoteId)];
 
@@ -102,14 +135,28 @@ export function App() {
 
         if (!cancelled) {
           const sortedNotes = sortNotesByUpdatedTime(initialNotes);
+          const sortedFolders = sortNoteFoldersByName(loadedFolders);
+          const persistedOpenFolderIds = loadOpenNoteFolderIds().filter((folderId) =>
+            sortedFolders.some((folder) => folder.id === folderId)
+          );
+          const lastOpenNoteId = window.localStorage.getItem(lastOpenNoteStorageKey);
+          const initialSelectedNote =
+            sortedNotes.find((note) => note.id === lastOpenNoteId) ?? sortedNotes[0] ?? null;
+          const initialOpenFolderIds = initialSelectedNote?.folderId
+            ? ensureId(persistedOpenFolderIds, initialSelectedNote.folderId)
+            : persistedOpenFolderIds;
           setNotes(sortedNotes);
+          setNoteFolders(sortedFolders);
+          setOpenNoteFolderIds(initialOpenFolderIds);
           const sortedTemplates = sortNoteTemplatesByName(loadedTemplates);
           setNoteTemplates(sortedTemplates);
-          setSelectedNoteId(sortedNotes[0]?.id ?? null);
+          setSelectedNoteId(initialSelectedNote?.id ?? null);
           setSelectedTemplateId(sortedTemplates[0]?.id ?? null);
-          setActiveMarkdown(sortedNotes[0]?.markdown ?? '');
+          setActiveMarkdown(initialSelectedNote?.markdown ?? '');
+          setCurrentNoteListFolderId(initialSelectedNote?.folderId ?? null);
           setActiveTemplateName(sortedTemplates[0]?.name ?? '');
           setActiveTemplateMarkdown(sortedTemplates[0]?.markdown ?? '');
+          persistOpenNoteFolderIds(initialOpenFolderIds);
         }
       } catch (error) {
         if (!cancelled) {
@@ -141,7 +188,20 @@ export function App() {
     setDeletionTargetNoteIds((currentIds) =>
       currentIds.filter((id) => notes.some((note) => note.id === id))
     );
+    setMembershipChangeNoteIds((currentIds) =>
+      currentIds.filter((id) => notes.some((note) => note.id === id))
+    );
   }, [notes]);
+
+  useEffect(() => {
+    setOpenNoteFolderIds((currentIds) => {
+      const nextIds = currentIds.filter((folderId) => noteFolderIdSet.has(folderId));
+      if (nextIds.length !== currentIds.length) {
+        persistOpenNoteFolderIds(nextIds);
+      }
+      return nextIds;
+    });
+  }, [noteFolderIdSet]);
 
   useEffect(() => {
     if (
@@ -199,6 +259,9 @@ export function App() {
     }
 
     function hideListNavPeek() {
+      if (draggedNoteIds.length > 0) {
+        return;
+      }
       setIsListNavPeeking(false);
     }
 
@@ -261,7 +324,7 @@ export function App() {
       window.removeEventListener('blur', hideListNavPeek);
       window.removeEventListener('pointercancel', hideListNavPeek);
     };
-  }, [effectiveListNavCollapsed, isListNavPeeking]);
+  }, [draggedNoteIds.length, effectiveListNavCollapsed, isListNavPeeking]);
 
   const setListNavElementRef = useCallback((element: HTMLElement | null) => {
     listNavElementRef.current = element;
@@ -283,6 +346,22 @@ export function App() {
         )
       )
     );
+  }
+
+  function openNote(note: Note) {
+    setSelectedNoteId(note.id);
+    setActiveMarkdown(note.markdown);
+    setCurrentNoteListFolderId(note.folderId ?? null);
+    window.localStorage.setItem(lastOpenNoteStorageKey, note.id);
+
+    const noteFolderId = note.folderId;
+    if (noteFolderId) {
+      setOpenNoteFolderIds((currentIds) => {
+        const nextIds = ensureId(currentIds, noteFolderId);
+        persistOpenNoteFolderIds(nextIds);
+        return nextIds;
+      });
+    }
   }
 
   async function persistActiveNote(markdown: string): Promise<boolean> {
@@ -351,13 +430,13 @@ export function App() {
     setQuery(nextQuery);
   }
 
-  async function handleCreateNote() {
+  async function handleCreateNote(folderId: string | null = currentNoteListFolderId) {
     await persistActiveNote(activeMarkdown);
 
-    const note = createNote();
+    const targetFolderId = folderId && noteFolderIdSet.has(folderId) ? folderId : null;
+    const note = createNote('', crypto.randomUUID(), targetFolderId);
     setNotes((currentNotes) => sortNotesByUpdatedTime([note, ...currentNotes]));
-    setSelectedNoteId(note.id);
-    setActiveMarkdown(note.markdown);
+    openNote(note);
     setMobileView('editor');
 
     try {
@@ -366,6 +445,142 @@ export function App() {
     } catch (error) {
       setStorageError(getStorageErrorMessage(error));
     }
+  }
+
+  function handleStartCreateNoteFolder() {
+    setNoteFolderEditor({ folderId: null, name: '', error: null });
+  }
+
+  function handleStartRenameNoteFolder(folderId: string) {
+    const folder = noteFolders.find((item) => item.id === folderId);
+    if (!folder) {
+      return;
+    }
+
+    setNoteFolderEditor({ folderId: folder.id, name: folder.name, error: null });
+  }
+
+  function handleChangeNoteFolderEditorName(name: string) {
+    setNoteFolderEditor((currentEditor) =>
+      currentEditor ? { ...currentEditor, name, error: null } : currentEditor
+    );
+  }
+
+  async function handleSubmitNoteFolderEditor() {
+    if (!noteFolderEditor) {
+      return;
+    }
+
+    const normalizedName = normalizeNoteFolderName(noteFolderEditor.name);
+    if (!isValidNoteFolderName(normalizedName)) {
+      setNoteFolderEditor((currentEditor) =>
+        currentEditor ? { ...currentEditor, error: 'Note folder nameを入力してください。' } : null
+      );
+      return;
+    }
+    if (!isUniqueNoteFolderName(normalizedName, noteFolders, noteFolderEditor.folderId)) {
+      setNoteFolderEditor((currentEditor) =>
+        currentEditor ? { ...currentEditor, error: '同じ名前のNote folderがあります。' } : null
+      );
+      return;
+    }
+
+    const nextFolder = noteFolderEditor.folderId
+      ? { id: noteFolderEditor.folderId, name: normalizedName }
+      : createNoteFolder(normalizedName);
+
+    if (noteFolderEditor.folderId) {
+      setNoteFolders((currentFolders) =>
+        sortNoteFoldersByName(
+          currentFolders.map((currentFolder) =>
+            currentFolder.id === nextFolder.id ? nextFolder : currentFolder
+          )
+        )
+      );
+    } else {
+      setNoteFolders((currentFolders) => sortNoteFoldersByName([nextFolder, ...currentFolders]));
+      setOpenNoteFolderIds((currentIds) => {
+        const nextIds = ensureId(currentIds, nextFolder.id);
+        persistOpenNoteFolderIds(nextIds);
+        return nextIds;
+      });
+    }
+
+    try {
+      await putNoteFolder(nextFolder);
+      setNoteFolderEditor(null);
+      setStorageError(null);
+    } catch (error) {
+      setStorageError(getStorageErrorMessage(error));
+    }
+  }
+
+  function handleCancelNoteFolderEditor() {
+    setNoteFolderEditor(null);
+  }
+
+  async function handleDeleteNoteFolder(folderId: string) {
+    const folder = noteFolders.find((item) => item.id === folderId);
+    if (!folder) {
+      return;
+    }
+
+    const containedNotes = notes.filter((note) => note.folderId === folder.id);
+    const confirmed = window.confirm(
+      `${folder.name}と配下の${containedNotes.length}件のNoteは削除され、復元できません。削除しますか？`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    const containedNoteIdSet = new Set(containedNotes.map((note) => note.id));
+    const remainingNotes = sortNotesByUpdatedTime(
+      notes.filter((note) => !containedNoteIdSet.has(note.id))
+    );
+    const fallbackNote =
+      remainingNotes.length === 0 ? createNote(starterMarkdown, starterNoteId) : null;
+
+    try {
+      await deleteNoteFolderAndNotes(
+        folder.id,
+        containedNotes.map((note) => note.id)
+      );
+      if (fallbackNote) {
+        await putNote(fallbackNote);
+      }
+
+      const nextNotes = fallbackNote ? [fallbackNote] : remainingNotes;
+      setNoteFolders((currentFolders) =>
+        sortNoteFoldersByName(
+          currentFolders.filter((currentFolder) => currentFolder.id !== folder.id)
+        )
+      );
+      setNotes(nextNotes);
+      setOpenNoteFolderIds((currentIds) => {
+        const nextIds = currentIds.filter((currentFolderId) => currentFolderId !== folder.id);
+        persistOpenNoteFolderIds(nextIds);
+        return nextIds;
+      });
+      openNote(nextNotes[0]);
+      setMembershipChangeNoteIds([]);
+      setDeletionTargetNoteIds([]);
+      setIsDeletionTargetSelectionMode(false);
+      setMobileView('list');
+      setStorageError(null);
+    } catch (error) {
+      setStorageError(getStorageErrorMessage(error));
+    }
+  }
+
+  function handleToggleNoteFolderOpen(folderId: string) {
+    setOpenNoteFolderIds((currentIds) => {
+      const nextIds = currentIds.includes(folderId)
+        ? currentIds.filter((currentFolderId) => currentFolderId !== folderId)
+        : [...currentIds, folderId];
+      persistOpenNoteFolderIds(nextIds);
+      return nextIds;
+    });
+    setCurrentNoteListFolderId(folderId);
   }
 
   async function handleCreateTemplate() {
@@ -395,8 +610,7 @@ export function App() {
       return;
     }
 
-    setSelectedNoteId(nextNote.id);
-    setActiveMarkdown(nextNote.markdown);
+    openNote(nextNote);
     setMobileView('editor');
   }
 
@@ -435,8 +649,7 @@ export function App() {
       }
 
       setNotes(fallbackNotes);
-      setSelectedNoteId(fallbackNotes[0].id);
-      setActiveMarkdown(fallbackNotes[0].markdown);
+      openNote(fallbackNotes[0]);
       setMobileView('list');
       setStorageError(null);
     } catch (error) {
@@ -460,6 +673,91 @@ export function App() {
   function handleCancelDeletionTargetSelection() {
     setDeletionTargetNoteIds([]);
     setIsDeletionTargetSelectionMode(false);
+  }
+
+  function handleToggleMembershipChangeNote(noteId: string) {
+    setMembershipChangeNoteIds((currentIds) => {
+      const currentNote = notes.find((note) => note.id === noteId);
+      if (!currentNote) {
+        return currentIds;
+      }
+      const currentLevelId = getNoteListLevelId(currentNote, noteFolderIdSet);
+      const sameLevelIds = currentIds.filter((currentId) => {
+        const selectedNote = notes.find((note) => note.id === currentId);
+        return selectedNote && getNoteListLevelId(selectedNote, noteFolderIdSet) === currentLevelId;
+      });
+
+      return sameLevelIds.includes(noteId)
+        ? sameLevelIds.filter((currentId) => currentId !== noteId)
+        : [...sameLevelIds, noteId];
+    });
+  }
+
+  function handleDragNote(noteId: string) {
+    const draggedNote = notes.find((note) => note.id === noteId);
+    if (!draggedNote) {
+      setDraggedNoteIds([]);
+      return;
+    }
+
+    const draggedLevelId = getNoteListLevelId(draggedNote, noteFolderIdSet);
+    const selectedDraggedIds = membershipChangeNoteIds.filter((currentId) => {
+      const selectedNote = notes.find((note) => note.id === currentId);
+      return selectedNote && getNoteListLevelId(selectedNote, noteFolderIdSet) === draggedLevelId;
+    });
+
+    setDraggedNoteIds(selectedDraggedIds.includes(noteId) ? selectedDraggedIds : [noteId]);
+  }
+
+  function handleFinishNoteDrag() {
+    setDraggedNoteIds([]);
+  }
+
+  async function handleMoveDraggedNotesToFolder(folderId: string | null) {
+    if (draggedNoteIds.length === 0) {
+      return;
+    }
+
+    const targetFolderId = folderId && noteFolderIdSet.has(folderId) ? folderId : null;
+    const draggedNoteIdSet = new Set(draggedNoteIds);
+    const movedNotes: Note[] = [];
+    const nextNotes = notes.map((note) => {
+      if (!draggedNoteIdSet.has(note.id) || (note.folderId ?? null) === targetFolderId) {
+        return note;
+      }
+
+      const nextNote = { ...note, folderId: targetFolderId };
+      movedNotes.push(nextNote);
+      return nextNote;
+    });
+
+    setDraggedNoteIds([]);
+    setMembershipChangeNoteIds([]);
+    setCurrentNoteListFolderId(targetFolderId);
+
+    if (movedNotes.length === 0) {
+      return;
+    }
+
+    setNotes(sortNotesByUpdatedTime(nextNotes));
+
+    const movedOpenNote = selectedNote
+      ? movedNotes.some((note) => note.id === selectedNote.id)
+      : false;
+    if (movedOpenNote && targetFolderId) {
+      setOpenNoteFolderIds((currentIds) => {
+        const nextIds = ensureId(currentIds, targetFolderId);
+        persistOpenNoteFolderIds(nextIds);
+        return nextIds;
+      });
+    }
+
+    try {
+      await putNotes(movedNotes);
+      setStorageError(null);
+    } catch (error) {
+      setStorageError(getStorageErrorMessage(error));
+    }
   }
 
   async function handleDeleteDeletionTargets() {
@@ -504,8 +802,12 @@ export function App() {
       });
 
       const nextOpenNote = deletesOpenNote ? nextNotes[0] : selectedNote;
-      setSelectedNoteId(nextOpenNote?.id ?? null);
-      setActiveMarkdown(nextOpenNote?.markdown ?? '');
+      if (nextOpenNote) {
+        openNote(nextOpenNote);
+      } else {
+        setSelectedNoteId(null);
+        setActiveMarkdown('');
+      }
       setDeletionTargetNoteIds([]);
       setIsDeletionTargetSelectionMode(false);
       setMobileView('list');
@@ -531,8 +833,7 @@ export function App() {
 
     const note = duplicateNote(latestSource);
     setNotes((currentNotes) => sortNotesByUpdatedTime([note, ...currentNotes]));
-    setSelectedNoteId(note.id);
-    setActiveMarkdown(note.markdown);
+    openNote(note);
     setMobileView('editor');
 
     try {
@@ -588,8 +889,7 @@ export function App() {
 
     const note = createNote(template.markdown);
     setNotes((currentNotes) => sortNotesByUpdatedTime([note, ...currentNotes]));
-    setSelectedNoteId(note.id);
-    setActiveMarkdown(note.markdown);
+    openNote(note);
     setAppView('notes');
     setMobileView('editor');
 
@@ -683,8 +983,13 @@ export function App() {
       ) : null}
       <NoteList
         notes={visibleNotes}
+        noteFolders={noteFolders}
         selectedNoteId={selectedNoteId}
         deletionTargetNoteIds={deletionTargetNoteIds}
+        membershipChangeNoteIds={membershipChangeNoteIds}
+        openNoteFolderIds={openNoteFolderIds}
+        noteFolderEditor={noteFolderEditor}
+        isNoteDragging={draggedNoteIds.length > 0}
         isDeletionTargetSelectionMode={isDeletionTargetSelectionMode}
         query={query}
         canToggleListNav={canToggleListNav}
@@ -692,9 +997,20 @@ export function App() {
         listNavRef={setListNavElementRef}
         onQueryChange={handleQueryChange}
         onCreateNote={handleCreateNote}
+        onStartCreateNoteFolder={handleStartCreateNoteFolder}
         onSelectNote={handleSelectNote}
         onStartDeletionTargetSelection={handleStartDeletionTargetSelection}
         onToggleDeletionTarget={handleToggleDeletionTarget}
+        onToggleMembershipChangeNote={handleToggleMembershipChangeNote}
+        onDragNote={handleDragNote}
+        onFinishNoteDrag={handleFinishNoteDrag}
+        onMoveDraggedNotesToFolder={handleMoveDraggedNotesToFolder}
+        onToggleNoteFolderOpen={handleToggleNoteFolderOpen}
+        onStartRenameNoteFolder={handleStartRenameNoteFolder}
+        onChangeNoteFolderEditorName={handleChangeNoteFolderEditorName}
+        onSubmitNoteFolderEditor={handleSubmitNoteFolderEditor}
+        onCancelNoteFolderEditor={handleCancelNoteFolderEditor}
+        onDeleteNoteFolder={handleDeleteNoteFolder}
         onDeleteDeletionTargets={handleDeleteDeletionTargets}
         onCancelDeletionTargetSelection={handleCancelDeletionTargetSelection}
         onOpenTemplateManagement={openTemplateManagement}
@@ -854,6 +1170,34 @@ function loadSidebarWidth(): number {
 
 function loadListNavCollapsed(): boolean {
   return window.localStorage.getItem(listNavCollapsedStorageKey) === 'true';
+}
+
+function loadOpenNoteFolderIds(): string[] {
+  try {
+    const storedValue = window.localStorage.getItem(noteFolderOpenStorageKey);
+    if (!storedValue) {
+      return [];
+    }
+
+    const parsedValue: unknown = JSON.parse(storedValue);
+    return Array.isArray(parsedValue)
+      ? parsedValue.filter((value): value is string => typeof value === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistOpenNoteFolderIds(folderIds: string[]) {
+  window.localStorage.setItem(noteFolderOpenStorageKey, JSON.stringify([...new Set(folderIds)]));
+}
+
+function ensureId(ids: string[], id: string): string[] {
+  return ids.includes(id) ? ids : [...ids, id];
+}
+
+function getNoteListLevelId(note: Note, folderIdSet: Set<string>): string {
+  return note.folderId && folderIdSet.has(note.folderId) ? note.folderId : 'unfiled';
 }
 
 function matchesSmallScreen(): boolean {

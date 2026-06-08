@@ -27,13 +27,9 @@ describe('syncNormalizedEditorMarkdown', () => {
     const onMarkdownChange = vi.fn();
 
     try {
-      syncNormalizedEditorMarkdown(
-        editor,
-        '',
-        onMarkdownChange,
-        editorRoot,
+      syncNormalizedEditorMarkdown(editor, '', onMarkdownChange, editorRoot, {
         scheduleAnimationFrame
-      );
+      });
       animationFrameCallbacks.at(-1)?.(0);
 
       const selection = window.getSelection();
@@ -77,9 +73,11 @@ describe('syncNormalizedEditorMarkdown', () => {
     } as unknown as MDXEditorMethods;
 
     try {
-      syncNormalizedEditorMarkdown(editor, '', vi.fn(), editorRoot, (callback) => {
-        animationFrameCallbacks.push(callback);
-        return 1;
+      syncNormalizedEditorMarkdown(editor, '', vi.fn(), editorRoot, {
+        scheduleAnimationFrame: (callback) => {
+          animationFrameCallbacks.push(callback);
+          return 1;
+        }
       });
 
       expect(scrollingElement.scrollTop).toBe(420);
@@ -98,6 +96,38 @@ describe('syncNormalizedEditorMarkdown', () => {
       } else {
         Reflect.deleteProperty(document, 'scrollingElement');
       }
+    }
+  });
+
+  it('can skip selection restoration when normalizing after editor blur', () => {
+    const editorRoot = document.createElement('div');
+    editorRoot.contentEditable = 'true';
+    editorRoot.textContent = 'https://example.com/spec';
+    document.body.append(editorRoot);
+    placeCursor(editorRoot.firstChild, editorRoot.textContent.length);
+
+    const animationFrameCallbacks: FrameRequestCallback[] = [];
+    const editor = {
+      getMarkdown: () => 'https://example.com/spec',
+      setMarkdown: vi.fn(() => {
+        editorRoot.textContent = 'https://example.com/spec';
+        window.getSelection()?.removeAllRanges();
+      })
+    } as unknown as MDXEditorMethods;
+
+    try {
+      syncNormalizedEditorMarkdown(editor, '', vi.fn(), editorRoot, {
+        restoreSelection: false,
+        scheduleAnimationFrame: (callback) => {
+          animationFrameCallbacks.push(callback);
+          return 1;
+        }
+      });
+
+      expect(animationFrameCallbacks).toHaveLength(0);
+      expect(window.getSelection()?.rangeCount).toBe(0);
+    } finally {
+      editorRoot.remove();
     }
   });
 });

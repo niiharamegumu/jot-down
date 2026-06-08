@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import type { ComponentProps } from 'react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { NoteList } from './NoteList';
@@ -18,27 +19,10 @@ const notes = [
 
 describe('NoteList', () => {
   it('shows note titles, snippets, and the selected note', () => {
-    render(
-      <NoteList
-        notes={notes}
-        selectedNoteId="note-1"
-        deletionTargetNoteIds={[]}
-        isDeletionTargetSelectionMode={false}
-        query=""
-        canToggleListNav={true}
-        isListNavCollapsed={false}
-        onQueryChange={vi.fn()}
-        onCreateNote={vi.fn()}
-        onSelectNote={vi.fn()}
-        onStartDeletionTargetSelection={vi.fn()}
-        onToggleDeletionTarget={vi.fn()}
-        onDeleteDeletionTargets={vi.fn()}
-        onCancelDeletionTargetSelection={vi.fn()}
-        onOpenTemplateManagement={vi.fn()}
-        onToggleListNav={vi.fn()}
-        onHideListNavPeek={vi.fn()}
-      />
-    );
+    renderNoteList({
+      notes,
+      selectedNoteId: 'note-1'
+    });
 
     expect(screen.getByRole('option', { name: /今日のNote/ })).toHaveAttribute(
       'aria-selected',
@@ -58,27 +42,14 @@ describe('NoteList', () => {
     const onSelectNote = vi.fn();
     const onOpenTemplateManagement = vi.fn();
 
-    render(
-      <NoteList
-        notes={notes}
-        selectedNoteId={null}
-        deletionTargetNoteIds={[]}
-        isDeletionTargetSelectionMode={false}
-        query=""
-        canToggleListNav={true}
-        isListNavCollapsed={false}
-        onQueryChange={onQueryChange}
-        onCreateNote={onCreateNote}
-        onSelectNote={onSelectNote}
-        onStartDeletionTargetSelection={vi.fn()}
-        onToggleDeletionTarget={vi.fn()}
-        onDeleteDeletionTargets={vi.fn()}
-        onCancelDeletionTargetSelection={vi.fn()}
-        onOpenTemplateManagement={onOpenTemplateManagement}
-        onToggleListNav={vi.fn()}
-        onHideListNavPeek={vi.fn()}
-      />
-    );
+    renderNoteList({
+      notes,
+      selectedNoteId: null,
+      onQueryChange,
+      onCreateNote,
+      onSelectNote,
+      onOpenTemplateManagement
+    });
 
     await user.type(screen.getByRole('searchbox', { name: 'Noteを検索' }), '買い物');
     await user.click(screen.getByRole('button', { name: '新しいNoteを作成' }));
@@ -91,6 +62,16 @@ describe('NoteList', () => {
     expect(onOpenTemplateManagement).toHaveBeenCalledTimes(1);
   });
 
+  it('places the note folder creation action before the multi-note selection action', () => {
+    renderNoteList({ notes });
+
+    const header = document.querySelector('.note-list__header') as HTMLElement;
+    const headerActions = Array.from(header.querySelectorAll('button'));
+
+    expect(headerActions[0]).toBe(screen.getByRole('button', { name: '新しいNote folderを作成' }));
+    expect(headerActions[1]).toBe(screen.getByRole('button', { name: '複数Noteを選択' }));
+  });
+
   it('lets the user mark deletion target notes in the dedicated mode', async () => {
     const user = userEvent.setup();
     const onStartDeletionTargetSelection = vi.fn();
@@ -98,27 +79,14 @@ describe('NoteList', () => {
     const onDeleteDeletionTargets = vi.fn();
     const onCancelDeletionTargetSelection = vi.fn();
 
-    const { rerender } = render(
-      <NoteList
-        notes={notes}
-        selectedNoteId="note-1"
-        deletionTargetNoteIds={[]}
-        isDeletionTargetSelectionMode={false}
-        query=""
-        canToggleListNav={true}
-        isListNavCollapsed={false}
-        onQueryChange={vi.fn()}
-        onCreateNote={vi.fn()}
-        onSelectNote={vi.fn()}
-        onStartDeletionTargetSelection={onStartDeletionTargetSelection}
-        onToggleDeletionTarget={onToggleDeletionTarget}
-        onDeleteDeletionTargets={onDeleteDeletionTargets}
-        onCancelDeletionTargetSelection={onCancelDeletionTargetSelection}
-        onOpenTemplateManagement={vi.fn()}
-        onToggleListNav={vi.fn()}
-        onHideListNavPeek={vi.fn()}
-      />
-    );
+    const { rerender } = renderNoteList({
+      notes,
+      selectedNoteId: 'note-1',
+      onStartDeletionTargetSelection,
+      onToggleDeletionTarget,
+      onDeleteDeletionTargets,
+      onCancelDeletionTargetSelection
+    });
 
     await user.click(screen.getByRole('button', { name: '複数Noteを選択' }));
 
@@ -126,23 +94,16 @@ describe('NoteList', () => {
 
     rerender(
       <NoteList
-        notes={notes}
-        selectedNoteId="note-1"
-        deletionTargetNoteIds={['note-2']}
-        isDeletionTargetSelectionMode={true}
-        query=""
-        canToggleListNav={true}
-        isListNavCollapsed={false}
-        onQueryChange={vi.fn()}
-        onCreateNote={vi.fn()}
-        onSelectNote={vi.fn()}
-        onStartDeletionTargetSelection={onStartDeletionTargetSelection}
-        onToggleDeletionTarget={onToggleDeletionTarget}
-        onDeleteDeletionTargets={onDeleteDeletionTargets}
-        onCancelDeletionTargetSelection={onCancelDeletionTargetSelection}
-        onOpenTemplateManagement={vi.fn()}
-        onToggleListNav={vi.fn()}
-        onHideListNavPeek={vi.fn()}
+        {...getNoteListProps({
+          notes,
+          selectedNoteId: 'note-1',
+          deletionTargetNoteIds: ['note-2'],
+          isDeletionTargetSelectionMode: true,
+          onStartDeletionTargetSelection,
+          onToggleDeletionTarget,
+          onDeleteDeletionTargets,
+          onCancelDeletionTargetSelection
+        })}
       />
     );
 
@@ -165,27 +126,12 @@ describe('NoteList', () => {
     const user = userEvent.setup();
     const onToggleListNav = vi.fn();
 
-    render(
-      <NoteList
-        notes={notes}
-        selectedNoteId="note-1"
-        deletionTargetNoteIds={[]}
-        isDeletionTargetSelectionMode={false}
-        query=""
-        canToggleListNav={true}
-        isListNavCollapsed={true}
-        onQueryChange={vi.fn()}
-        onCreateNote={vi.fn()}
-        onSelectNote={vi.fn()}
-        onStartDeletionTargetSelection={vi.fn()}
-        onToggleDeletionTarget={vi.fn()}
-        onDeleteDeletionTargets={vi.fn()}
-        onCancelDeletionTargetSelection={vi.fn()}
-        onOpenTemplateManagement={vi.fn()}
-        onToggleListNav={onToggleListNav}
-        onHideListNavPeek={vi.fn()}
-      />
-    );
+    renderNoteList({
+      notes,
+      selectedNoteId: 'note-1',
+      isListNavCollapsed: true,
+      onToggleListNav
+    });
 
     expect(screen.getByRole('button', { name: 'Note一覧を開く' })).toHaveAttribute(
       'aria-expanded',
@@ -201,4 +147,131 @@ describe('NoteList', () => {
 
     expect(onToggleListNav).toHaveBeenCalledTimes(1);
   });
+
+  it('groups folder notes above unfiled notes and toggles the folder open state', async () => {
+    const user = userEvent.setup();
+    const onToggleNoteFolderOpen = vi.fn();
+
+    renderNoteList({
+      notes: [{ ...notes[0], folderId: 'folder-a' }, notes[1]],
+      noteFolders: [{ id: 'folder-a', name: '仕事' }],
+      openNoteFolderIds: ['folder-a'],
+      onToggleNoteFolderOpen
+    });
+
+    expect(screen.getByRole('group', { name: '仕事のNote' })).toBeInTheDocument();
+    const folderToggle = screen.getAllByRole('button', { name: /仕事/ })[0];
+    expect(folderToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('option', { name: /今日のNote/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /見出しなし/ })).toBeInTheDocument();
+
+    await user.click(folderToggle);
+
+    expect(onToggleNoteFolderOpen).toHaveBeenCalledWith('folder-a');
+  });
+
+  it('moves a dragged note to a note folder drop target', () => {
+    const onDragNote = vi.fn();
+    const onMoveDraggedNotesToFolder = vi.fn();
+
+    renderNoteList({
+      notes,
+      noteFolders: [{ id: 'folder-a', name: '仕事' }],
+      openNoteFolderIds: ['folder-a'],
+      onDragNote,
+      onMoveDraggedNotesToFolder
+    });
+
+    const note = screen.getByRole('option', { name: /今日のNote/ });
+    const folderHeader = screen
+      .getByRole('group', { name: '仕事のNote' })
+      .querySelector('.note-folder-group__header') as HTMLElement;
+
+    fireEvent.dragStart(note);
+    fireEvent.drop(folderHeader);
+
+    expect(onDragNote).toHaveBeenCalledWith('note-1');
+    expect(onMoveDraggedNotesToFolder).toHaveBeenCalledWith('folder-a');
+  });
+
+  it('keeps the peeking list navigation open while a note is being dragged', () => {
+    const onHideListNavPeek = vi.fn();
+
+    renderNoteList({
+      notes,
+      isNoteDragging: true,
+      onHideListNavPeek
+    });
+
+    fireEvent.mouseLeave(screen.getByRole('complementary', { name: 'Notes' }));
+
+    expect(onHideListNavPeek).not.toHaveBeenCalled();
+  });
+
+  it('marks only the active drop target while a note is being dragged over it', () => {
+    renderNoteList({
+      notes: [{ ...notes[0], folderId: 'folder-a' }, notes[1]],
+      noteFolders: [{ id: 'folder-a', name: '仕事' }],
+      openNoteFolderIds: ['folder-a'],
+      isNoteDragging: true
+    });
+
+    const folderGroup = screen.getByRole('group', { name: '仕事のNote' });
+    const unfiledArea = screen.getByLabelText('未分類Note領域');
+
+    fireEvent.dragOver(folderGroup);
+
+    expect(folderGroup).toHaveClass('note-folder-group--drop-target');
+    expect(unfiledArea).not.toHaveClass('unfiled-drop-area--drop-target');
+
+    fireEvent.dragOver(unfiledArea);
+
+    expect(folderGroup).not.toHaveClass('note-folder-group--drop-target');
+    expect(unfiledArea).toHaveClass('unfiled-drop-area--drop-target');
+  });
 });
+
+type NoteListProps = ComponentProps<typeof NoteList>;
+
+function getNoteListProps(overrides: Partial<NoteListProps> = {}): NoteListProps {
+  return {
+    notes,
+    noteFolders: [],
+    selectedNoteId: null,
+    deletionTargetNoteIds: [],
+    membershipChangeNoteIds: [],
+    openNoteFolderIds: [],
+    noteFolderEditor: null,
+    isNoteDragging: false,
+    isDeletionTargetSelectionMode: false,
+    query: '',
+    canToggleListNav: true,
+    isListNavCollapsed: false,
+    onQueryChange: vi.fn(),
+    onCreateNote: vi.fn(),
+    onStartCreateNoteFolder: vi.fn(),
+    onSelectNote: vi.fn(),
+    onStartDeletionTargetSelection: vi.fn(),
+    onToggleDeletionTarget: vi.fn(),
+    onToggleMembershipChangeNote: vi.fn(),
+    onDragNote: vi.fn(),
+    onFinishNoteDrag: vi.fn(),
+    onMoveDraggedNotesToFolder: vi.fn(),
+    onToggleNoteFolderOpen: vi.fn(),
+    onStartRenameNoteFolder: vi.fn(),
+    onChangeNoteFolderEditorName: vi.fn(),
+    onSubmitNoteFolderEditor: vi.fn(),
+    onCancelNoteFolderEditor: vi.fn(),
+    onDeleteNoteFolder: vi.fn(),
+    onDeleteDeletionTargets: vi.fn(),
+    onCancelDeletionTargetSelection: vi.fn(),
+    onOpenTemplateManagement: vi.fn(),
+    onToggleListNav: vi.fn(),
+    onHideListNavPeek: vi.fn(),
+    ...overrides
+  };
+}
+
+function renderNoteList(overrides: Partial<NoteListProps> = {}) {
+  return render(<NoteList {...getNoteListProps(overrides)} />);
+}

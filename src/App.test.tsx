@@ -1,12 +1,16 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import {
+  deleteNoteFolderAndNotes,
   deleteNotes,
+  loadNoteFolders,
   loadNotes,
   loadNoteTemplates,
   putNote,
+  putNoteFolder,
+  putNotes,
   putNoteTemplate
 } from './data/notesDb';
 
@@ -55,21 +59,37 @@ vi.mock('@mdxeditor/editor', async () => {
 
 vi.mock('./data/notesDb', () => ({
   loadNotes: vi.fn(),
+  loadNoteFolders: vi.fn(),
   loadNoteTemplates: vi.fn(),
   putNote: vi.fn(),
+  putNotes: vi.fn(),
+  putNoteFolder: vi.fn(),
   deleteNote: vi.fn(),
   deleteNotes: vi.fn(),
+  deleteNoteFolderAndNotes: vi.fn(),
   putNoteTemplate: vi.fn(),
   deleteNoteTemplate: vi.fn()
 }));
 
 const loadNotesMock = vi.mocked(loadNotes);
+const loadNoteFoldersMock = vi.mocked(loadNoteFolders);
 const loadNoteTemplatesMock = vi.mocked(loadNoteTemplates);
 const putNoteMock = vi.mocked(putNote);
+const putNotesMock = vi.mocked(putNotes);
+const putNoteFolderMock = vi.mocked(putNoteFolder);
 const deleteNotesMock = vi.mocked(deleteNotes);
+const deleteNoteFolderAndNotesMock = vi.mocked(deleteNoteFolderAndNotes);
 const putNoteTemplateMock = vi.mocked(putNoteTemplate);
 
 describe('App', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    loadNoteFoldersMock.mockResolvedValue([]);
+    putNotesMock.mockResolvedValue();
+    putNoteFolderMock.mockResolvedValue();
+    deleteNoteFolderAndNotesMock.mockResolvedValue();
+  });
+
   it('creates and shows a starter note when the local note store is empty', async () => {
     loadNotesMock.mockResolvedValue([]);
     loadNoteTemplatesMock.mockResolvedValue([]);
@@ -112,6 +132,91 @@ describe('App', () => {
 
     expect(screen.getByRole('option', { name: /買い物/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /アイデア/ })).not.toBeInTheDocument();
+  });
+
+  it('creates a note folder from the note list', async () => {
+    const user = userEvent.setup();
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'note',
+        markdown: '# 既存',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      }
+    ]);
+    loadNoteTemplatesMock.mockResolvedValue([]);
+    putNoteMock.mockResolvedValue();
+
+    render(<App />);
+
+    await screen.findByRole('option', { name: /既存/ });
+    await user.click(screen.getByRole('button', { name: '新しいNote folderを作成' }));
+    await user.type(screen.getByRole('textbox', { name: 'Note folder name' }), '仕事');
+    await user.click(screen.getByRole('button', { name: 'Note folderを保存' }));
+
+    expect(putNoteFolderMock).toHaveBeenCalledWith(expect.objectContaining({ name: '仕事' }));
+    expect(await screen.findByRole('group', { name: '仕事のNote' })).toBeInTheDocument();
+  });
+
+  it('moves an unfiled note into a note folder by drag and drop', async () => {
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'note',
+        markdown: '# 既存',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      }
+    ]);
+    loadNoteFoldersMock.mockResolvedValue([{ id: 'work', name: '仕事' }]);
+    loadNoteTemplatesMock.mockResolvedValue([]);
+    putNoteMock.mockResolvedValue();
+
+    render(<App />);
+
+    const note = await screen.findByRole('option', { name: /既存/ });
+    const folderHeader = screen
+      .getByRole('group', { name: '仕事のNote' })
+      .querySelector('.note-folder-group__header') as HTMLElement;
+
+    fireEvent.dragStart(note);
+    fireEvent.drop(folderHeader);
+
+    expect(putNotesMock).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'note', folderId: 'work' })
+    ]);
+  });
+
+  it('deletes a note folder with its contained notes', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'work-note',
+        markdown: '# 仕事',
+        folderId: 'work',
+        updatedAt: '2026-05-27T03:15:00.000Z'
+      },
+      {
+        id: 'log',
+        markdown: '# ログ',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      }
+    ]);
+    loadNoteFoldersMock.mockResolvedValue([{ id: 'work', name: '仕事' }]);
+    loadNoteTemplatesMock.mockResolvedValue([]);
+    putNoteMock.mockResolvedValue();
+
+    render(<App />);
+
+    await screen.findByRole('option', { name: /仕事/ });
+    await user.click(screen.getByRole('button', { name: '仕事と配下のNoteを削除' }));
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      '仕事と配下の1件のNoteは削除され、復元できません。削除しますか？'
+    );
+    expect(deleteNoteFolderAndNotesMock).toHaveBeenCalledWith('work', ['work-note']);
+    expect(screen.queryByRole('group', { name: '仕事のNote' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /ログ/ })).toHaveAttribute('aria-selected', 'true');
+
+    confirmSpy.mockRestore();
   });
 
   it('creates a note template and then creates a note from it', async () => {
