@@ -2,6 +2,7 @@ export type Note = {
   id: string;
   markdown: string;
   updatedAt: string;
+  folderId?: string | null;
 };
 
 export const UNTITLED_NOTE_TITLE = '無題';
@@ -24,16 +25,21 @@ export type NoteLineRange = {
 
 export type NoteLineMovement = 'up' | 'down' | 'start' | 'end';
 
-export function createNote(markdown = '', id: string = crypto.randomUUID()): Note {
+export function createNote(
+  markdown = '',
+  id: string = crypto.randomUUID(),
+  folderId: string | null = null
+): Note {
   return {
     id,
     markdown,
+    folderId,
     updatedAt: new Date().toISOString()
   };
 }
 
 export function duplicateNote(source: Note, id: string = crypto.randomUUID()): Note {
-  return createNote(source.markdown, id);
+  return createNote(source.markdown, id, source.folderId ?? null);
 }
 
 export function deriveNoteTitle(markdown: string): string {
