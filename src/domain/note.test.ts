@@ -63,15 +63,19 @@ describe('Note order', () => {
 });
 
 describe('Note duplication', () => {
-  it('creates a separate note with the same Markdown text', () => {
-    const source = note('source', '# 買い物\n- [ ] 牛乳', '2026-05-01T00:00:00.000Z');
+  it('creates a separate note with the same Markdown text and folder membership', () => {
+    const source = {
+      ...note('source', '# 買い物\n- [ ] 牛乳', '2026-05-01T00:00:00.000Z'),
+      folderId: 'folder-a'
+    };
 
     const duplicated = duplicateNote(source, 'duplicate');
 
     expect(duplicated).toEqual(
       expect.objectContaining({
         id: 'duplicate',
-        markdown: source.markdown
+        markdown: source.markdown,
+        folderId: 'folder-a'
       })
     );
     expect(duplicated.updatedAt).not.toBe(source.updatedAt);

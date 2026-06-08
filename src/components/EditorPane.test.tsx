@@ -963,10 +963,12 @@ describe('EditorPane', () => {
     expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] 買い物\n# 会議');
   });
 
-  it('lists editor shortcuts in the toolbar help', () => {
+  it('lists editor shortcuts in the floating help', () => {
     renderEditor();
 
-    expect(screen.getByRole('button', { name: 'ショートカット一覧' })).toBeInTheDocument();
+    const shortcutHelpButton = screen.getByRole('button', { name: 'ショートカット一覧' });
+    expect(shortcutHelpButton).toBeInTheDocument();
+    expect(shortcutHelpButton.closest('.editor-toolbar')).toBeNull();
     expect(screen.getByText('⌘ + Enter')).toBeInTheDocument();
     expect(screen.getByText('タスクのチェックを切り替え')).toBeInTheDocument();
     expect(screen.getByText('⌥ + ↑')).toBeInTheDocument();
