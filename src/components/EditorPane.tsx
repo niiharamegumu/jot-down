@@ -154,9 +154,13 @@ export function EditorPane({
       pendingProgrammaticMarkdownRef.current = markdown;
       editorRef.current?.setMarkdown(toEditorMarkdown(markdown));
       previousNoteIdRef.current = note.id;
-      window.requestAnimationFrame(() =>
-        editorRef.current?.focus(undefined, { defaultSelection: 'rootStart' })
-      );
+      window.requestAnimationFrame(() => {
+        if (shouldSkipEditorAutoFocus()) {
+          return;
+        }
+
+        editorRef.current?.focus(undefined, { defaultSelection: 'rootStart' });
+      });
     }
   }, [markdown, note]);
 
@@ -187,43 +191,6 @@ export function EditorPane({
         <p className="editor-toolbar__updated-at">
           {updatedAt ? updatedAtFormatter.format(new Date(updatedAt)) : ''}
         </p>
-        <button
-          className="icon-button shortcut-help-button"
-          type="button"
-          aria-label="ショートカット一覧"
-        >
-          <svg aria-hidden="true" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M9.5 9a2.6 2.6 0 0 1 5 1c0 1.7-1.8 2-2.4 3.2" />
-            <path d="M12 17h.01" />
-          </svg>
-          <span className="shortcut-help-button__tooltip" role="tooltip">
-            <span>
-              <kbd>⌘ + Enter</kbd>
-              <span>タスクのチェックを切り替え</span>
-            </span>
-            <span>
-              <kbd>⌥ + ↑</kbd>
-              <span>行を上へ移動</span>
-            </span>
-            <span>
-              <kbd>⌥ + ↓</kbd>
-              <span>行を下へ移動</span>
-            </span>
-            <span>
-              <kbd>⌃ + ⌥ + ↑</kbd>
-              <span>行を先頭へ移動</span>
-            </span>
-            <span>
-              <kbd>⌃ + ⌥ + ↓</kbd>
-              <span>行を末尾へ移動</span>
-            </span>
-            <span>
-              <kbd>⌘ + クリック</kbd>
-              <span>リンクを開く</span>
-            </span>
-          </span>
-        </button>
         <button
           className="icon-button copy-markdown-button"
           type="button"
@@ -302,6 +269,44 @@ export function EditorPane({
           </svg>
         </button>
       </header>
+
+      <button
+        className="icon-button shortcut-help-button"
+        type="button"
+        aria-label="ショートカット一覧"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M9.5 9a2.6 2.6 0 0 1 5 1c0 1.7-1.8 2-2.4 3.2" />
+          <path d="M12 17h.01" />
+        </svg>
+        <span className="shortcut-help-button__tooltip" role="tooltip">
+          <span>
+            <kbd>⌘ + Enter</kbd>
+            <span>タスクのチェックを切り替え</span>
+          </span>
+          <span>
+            <kbd>⌥ + ↑</kbd>
+            <span>行を上へ移動</span>
+          </span>
+          <span>
+            <kbd>⌥ + ↓</kbd>
+            <span>行を下へ移動</span>
+          </span>
+          <span>
+            <kbd>⌃ + ⌥ + ↑</kbd>
+            <span>行を先頭へ移動</span>
+          </span>
+          <span>
+            <kbd>⌃ + ⌥ + ↓</kbd>
+            <span>行を末尾へ移動</span>
+          </span>
+          <span>
+            <kbd>⌘ + クリック</kbd>
+            <span>リンクを開く</span>
+          </span>
+        </span>
+      </button>
 
       {storageError ? (
         <div className="storage-error" role="alert">
@@ -570,7 +575,7 @@ export function EditorPane({
       return;
     }
 
-    syncNormalizedEditorMarkdown();
+    syncNormalizedEditorMarkdown({ restoreSelection: false });
     onFlush();
   }
 
@@ -597,10 +602,10 @@ export function EditorPane({
       return;
     }
 
-    window.requestAnimationFrame(syncNormalizedEditorMarkdown);
+    window.requestAnimationFrame(() => syncNormalizedEditorMarkdown());
   }
 
-  function syncNormalizedEditorMarkdown() {
+  function syncNormalizedEditorMarkdown({ restoreSelection = true } = {}) {
     const currentMarkdown = fromEditorMarkdown(editorRef.current?.getMarkdown() ?? markdown);
     if (
       shouldIgnorePendingProgrammaticMarkdown(currentMarkdown) ||
@@ -617,7 +622,9 @@ export function EditorPane({
         } as Parameters<typeof syncNormalizedMarkdownFromEditor>[0])
       : null;
 
-    syncNormalizedMarkdownFromEditor(editorAdapter, markdown, onMarkdownChange, getEditorRoot());
+    syncNormalizedMarkdownFromEditor(editorAdapter, markdown, onMarkdownChange, getEditorRoot(), {
+      restoreSelection
+    });
   }
 
   function handleInsertTemplate(templateMarkdown: string) {
@@ -821,4 +828,31 @@ export function EditorPane({
   function fromEditorMarkdown(value: string): string {
     return removeEditorOnlyListBoundaries(value);
   }
+
+  function shouldSkipEditorAutoFocus(): boolean {
+    const activeElement = document.activeElement;
+    if (
+      !activeElement ||
+      activeElement === document.body ||
+      activeElement === document.documentElement
+    ) {
+      return false;
+    }
+
+    if (editorShellRef.current?.contains(activeElement)) {
+      return false;
+    }
+
+    return isEditableElement(activeElement);
+  }
+}
+
+function isEditableElement(element: Element): boolean {
+  return (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLSelectElement ||
+    element.getAttribute('contenteditable') === 'true' ||
+    element.closest('[contenteditable="true"]') !== null
+  );
 }

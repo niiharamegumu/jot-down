@@ -17,12 +17,20 @@ type ScrollPositionSnapshot = {
   left: number;
 };
 
+type SyncNormalizedEditorMarkdownOptions = {
+  restoreSelection?: boolean;
+  scheduleAnimationFrame?: typeof window.requestAnimationFrame;
+};
+
 export function syncNormalizedEditorMarkdown(
   editor: MDXEditorMethods | null,
   fallbackMarkdown: string,
   onMarkdownChange: (markdown: string) => void,
   editorRoot: HTMLElement | null = null,
-  scheduleAnimationFrame: typeof window.requestAnimationFrame = window.requestAnimationFrame
+  {
+    restoreSelection = true,
+    scheduleAnimationFrame = window.requestAnimationFrame
+  }: SyncNormalizedEditorMarkdownOptions = {}
 ): boolean {
   const currentMarkdown = editor?.getMarkdown() ?? fallbackMarkdown;
   const normalizedMarkdown = normalizeSupportedMarkdown(currentMarkdown);
@@ -30,7 +38,8 @@ export function syncNormalizedEditorMarkdown(
     return false;
   }
 
-  const selectionSnapshot = editorRoot ? captureTextSelectionSnapshot(editorRoot) : null;
+  const selectionSnapshot =
+    restoreSelection && editorRoot ? captureTextSelectionSnapshot(editorRoot) : null;
   editor?.setMarkdown(normalizedMarkdown);
   onMarkdownChange(normalizedMarkdown);
 
