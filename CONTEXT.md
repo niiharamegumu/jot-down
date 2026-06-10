@@ -25,8 +25,8 @@ The note the user most recently had open for editing on the current device. Rest
 _Avoid_: Last edited note, pinned note, default note
 
 **Markdown live editing**:
-A single editing surface where Markdown text remains the source of truth while task markers and headings are visually structured in place as the user types. Editing behavior follows the Markdown editor's native list and task semantics rather than preserving app-specific empty task states, while focused blocks must keep their visual scale and layout stable enough that cursor placement does not cause distracting typography or position shifts.
-_Avoid_: Separate preview, rendered-only document, edit/preview mode, layout-shifting focus state, block-type menu
+A single editing surface where Markdown text remains the source of truth while task markers and headings are visually structured in place as the user types. Editing behavior follows the Markdown editor's native list and task semantics rather than preserving app-specific empty task states, while focused blocks must keep their visual scale and layout stable enough that cursor placement does not cause distracting typography or position shifts. Familiar desktop text selection, including multi-click selection, should remain available in the editing surface unless the user intentionally activates a first-class structure control such as a task checkbox.
+_Avoid_: Separate preview, rendered-only document, edit/preview mode, layout-shifting focus state, block-type menu, app-specific text selection mode
 
 **Editor shortcut help**:
 A supplemental note editor control that shows available keyboard and pointer shortcuts without changing note content. Editor shortcut help belongs outside the primary note toolbar so the toolbar remains focused on note actions.
@@ -212,6 +212,9 @@ Domain expert: "No. The whole touched note line moves, while the same in-line te
 
 Developer: "Does every editor action use selected note lines as its target?"
 Domain expert: "No. This selected-range behavior belongs to note line movement."
+
+Developer: "Should task text clicks replace normal desktop text selection behavior?"
+Domain expert: "No. Markdown live editing may make the task marker checkable, but task text should still support familiar text selection such as multi-click selection."
 
 Developer: "When a note is duplicated, should the app add '(copy)' to the heading?"
 Domain expert: "No. Note duplication creates another note with the same Markdown text. Changing the heading would change the duplicated note content."

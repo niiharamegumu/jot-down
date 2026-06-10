@@ -14,17 +14,22 @@ export const taskCheckboxHitAreaWidthPx = 24;
 
 const editorsByRoot = new WeakMap<HTMLElement, LexicalEditor>();
 
+type TaskTextMouseDownEvent = Pick<
+  MouseEvent,
+  'button' | 'detail' | 'shiftKey' | 'metaKey' | 'ctrlKey' | 'altKey'
+>;
+type TextSelectionRange = { offset: number; endOffset: number };
+type WordSegment = { segment: string; index: number; isWordLike?: boolean };
+type WordSegmenter = { segment: (input: string) => Iterable<WordSegment> };
+type IntlWithSegmenter = typeof Intl & {
+  Segmenter?: new (locale?: string, options?: { granularity: 'word' }) => WordSegmenter;
+};
+
 export const mdxEditorSelectionPlugin = realmPlugin({
   init(realm) {
     realm.pub(createRootEditorSubscription$, (editor) => {
-      function handleTaskTextPointerDown(event: PointerEvent) {
-        if (
-          event.button !== 0 ||
-          event.shiftKey ||
-          event.metaKey ||
-          event.ctrlKey ||
-          event.altKey
-        ) {
+      function handleTaskTextMouseDown(event: MouseEvent) {
+        if (!shouldHandleTaskTextMouseDown(event)) {
           return;
         }
 
@@ -41,28 +46,93 @@ export const mdxEditorSelectionPlugin = realmPlugin({
           return;
         }
 
-        event.preventDefault();
-        selectTextOffsetInEditor(
-          editor,
-          checkbox,
-          getTextOffset(checkbox, range.startContainer, range.startOffset)
-        );
+        const clientX = event.clientX;
+        const clientY = event.clientY;
+        const clickCount = event.detail;
+        const initialOffset = getTextOffset(checkbox, range.startContainer, range.startOffset);
+
+        window.requestAnimationFrame(() => {
+          const selectionTarget = getTaskTextSelectionTarget(clientX, clientY) ?? {
+            checkbox,
+            offset: initialOffset
+          };
+          if (!selectionTarget.checkbox.isConnected) {
+            return;
+          }
+
+          const selectionRange = getTaskTextClickSelectionRange(
+            selectionTarget.checkbox.textContent ?? '',
+            selectionTarget.offset,
+            clickCount
+          );
+
+          if (selectionRange.offset === selectionRange.endOffset) {
+            selectTextOffsetInEditor(editor, selectionTarget.checkbox, selectionRange.offset);
+            restoreBrowserTextSelection(
+              selectionTarget.checkbox,
+              selectionRange.offset,
+              selectionRange.endOffset
+            );
+            return;
+          }
+
+          selectTextRangeInEditor(
+            editor,
+            selectionTarget.checkbox,
+            selectionRange.offset,
+            selectionTarget.checkbox,
+            selectionRange.endOffset
+          );
+          restoreBrowserTextSelection(
+            selectionTarget.checkbox,
+            selectionRange.offset,
+            selectionRange.endOffset
+          );
+        });
       }
 
       return editor.registerRootListener((rootElement, previousRootElement) => {
         if (previousRootElement) {
           editorsByRoot.delete(previousRootElement);
-          previousRootElement.removeEventListener('pointerdown', handleTaskTextPointerDown, true);
+          previousRootElement.removeEventListener('mousedown', handleTaskTextMouseDown, true);
         }
 
         if (rootElement) {
           editorsByRoot.set(rootElement, editor);
-          rootElement.addEventListener('pointerdown', handleTaskTextPointerDown, true);
+          rootElement.addEventListener('mousedown', handleTaskTextMouseDown, true);
         }
       });
     });
   }
 });
+
+export function shouldHandleTaskTextMouseDown(event: TaskTextMouseDownEvent): boolean {
+  return (
+    event.button === 0 &&
+    event.detail >= 1 &&
+    !event.shiftKey &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey
+  );
+}
+
+export function getTaskTextClickSelectionRange(
+  text: string,
+  offset: number,
+  clickCount: number
+): TextSelectionRange {
+  const boundedOffset = Math.min(Math.max(offset, 0), text.length);
+  if (clickCount <= 1) {
+    return { offset: boundedOffset, endOffset: boundedOffset };
+  }
+
+  if (clickCount >= 3) {
+    return { offset: 0, endOffset: text.length };
+  }
+
+  return getWordSelectionRange(text, boundedOffset);
+}
 
 export function selectMdxEditorTextOffset(scope: HTMLElement, offset: number): boolean {
   const root = scope.closest('[contenteditable="true"]');
@@ -175,6 +245,114 @@ export function isTaskCheckboxHit(checkbox: HTMLElement, clientX: number): boole
   return clickX >= 0 && clickX <= taskCheckboxHitAreaWidthPx;
 }
 
+function getWordSelectionRange(text: string, offset: number): TextSelectionRange {
+  if (text.length === 0) {
+    return { offset: 0, endOffset: 0 };
+  }
+
+  const segmentedRange = getSegmentedWordSelectionRange(text, offset);
+  if (segmentedRange) {
+    return segmentedRange;
+  }
+
+  return getFallbackWordSelectionRange(text, offset);
+}
+
+function getTaskTextSelectionTarget(
+  clientX: number,
+  clientY: number
+): { checkbox: HTMLElement; offset: number } | null {
+  const range = createCaretRangeFromPoint(clientX, clientY);
+  if (!range) {
+    return null;
+  }
+
+  const targetElement =
+    range.startContainer instanceof HTMLElement
+      ? range.startContainer
+      : range.startContainer.parentElement;
+  const checkbox = targetElement?.closest('[role="checkbox"][aria-checked]');
+  if (!(checkbox instanceof HTMLElement) || isTaskCheckboxHit(checkbox, clientX)) {
+    return null;
+  }
+
+  if (!checkbox.contains(range.startContainer)) {
+    return null;
+  }
+
+  return {
+    checkbox,
+    offset: getTextOffset(checkbox, range.startContainer, range.startOffset)
+  };
+}
+
+function getSegmentedWordSelectionRange(text: string, offset: number): TextSelectionRange | null {
+  const Segmenter = (Intl as IntlWithSegmenter).Segmenter;
+  if (!Segmenter) {
+    return null;
+  }
+
+  const targetOffset = getTargetCharacterOffset(text, offset);
+  for (const segment of new Segmenter(undefined, { granularity: 'word' }).segment(text)) {
+    const endOffset = segment.index + segment.segment.length;
+    if (targetOffset < segment.index || targetOffset >= endOffset) {
+      continue;
+    }
+
+    if (segment.isWordLike || segment.segment.trim() !== '') {
+      return { offset: segment.index, endOffset };
+    }
+
+    return { offset, endOffset: offset };
+  }
+
+  return null;
+}
+
+function getFallbackWordSelectionRange(text: string, offset: number): TextSelectionRange {
+  const targetOffset = getTargetCharacterOffset(text, offset);
+  if (isSelectionBoundary(text[targetOffset])) {
+    return { offset, endOffset: offset };
+  }
+
+  let startOffset = targetOffset;
+  while (startOffset > 0 && !isSelectionBoundary(text[startOffset - 1])) {
+    startOffset -= 1;
+  }
+
+  let endOffset = targetOffset + 1;
+  while (endOffset < text.length && !isSelectionBoundary(text[endOffset])) {
+    endOffset += 1;
+  }
+
+  return { offset: startOffset, endOffset };
+}
+
+function getTargetCharacterOffset(text: string, offset: number): number {
+  return Math.min(offset, text.length - 1);
+}
+
+function isSelectionBoundary(character: string): boolean {
+  return /[\s.,;:!?()[\]{}"'`。、！？（）「」『』【】]/.test(character);
+}
+
+function restoreBrowserTextSelection(scope: HTMLElement, offset: number, endOffset: number) {
+  const editorRoot = scope.closest('[contenteditable="true"]');
+  if (editorRoot instanceof HTMLElement) {
+    focusEditorRootElementWithoutScrolling(editorRoot);
+  }
+
+  const startPosition = findTextPosition(scope, offset);
+  const endPosition = findTextPosition(scope, endOffset);
+  const range = document.createRange();
+  range.setStart(startPosition.node, startPosition.offset);
+  range.setEnd(endPosition.node, endPosition.offset);
+
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
 function selectTextOffsetInEditor(
   editor: LexicalEditor,
   scope: HTMLElement,
@@ -238,10 +416,16 @@ function selectTextRangeInEditor(
 
 function focusEditorRootWithoutScrolling(editor: LexicalEditor) {
   const root = editor.getRootElement();
+  if (root) {
+    focusEditorRootElementWithoutScrolling(root);
+  }
+}
+
+function focusEditorRootElementWithoutScrolling(root: HTMLElement) {
   try {
-    root?.focus({ preventScroll: true });
+    root.focus({ preventScroll: true });
   } catch {
-    root?.focus();
+    root.focus();
   }
 }
 
