@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -84,6 +84,7 @@ const putNoteTemplateMock = vi.mocked(putNoteTemplate);
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     loadNoteFoldersMock.mockResolvedValue([]);
     putNotesMock.mockResolvedValue();
     putNoteFolderMock.mockResolvedValue();
@@ -308,6 +309,129 @@ describe('App', () => {
     } finally {
       restoreClipboard();
     }
+  });
+
+  it('opens the command palette from the app-wide shortcut and opens a matching note', async () => {
+    const user = userEvent.setup();
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'shopping',
+        markdown: '# 買い物\n- [ ] 牛乳',
+        updatedAt: '2026-05-27T03:15:00.000Z'
+      },
+      {
+        id: 'ideas',
+        markdown: '# アイデア\n散歩中に考える',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      }
+    ]);
+    loadNoteTemplatesMock.mockResolvedValue([]);
+    putNoteMock.mockResolvedValue();
+
+    render(<App />);
+
+    expect(await screen.findByRole('option', { name: /買い物/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+
+    const palette = screen.getByRole('dialog', { name: 'コマンド' });
+    expect(screen.queryByRole('button', { name: 'ショートカット一覧' })).not.toBeInTheDocument();
+
+    await user.type(within(palette).getByRole('textbox', { name: 'NoteやActionを検索' }), '散歩');
+    await user.click(within(palette).getByRole('button', { name: /アイデア/ }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /アイデア/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(screen.getByRole('searchbox', { name: 'Noteを検索' })).toHaveValue('');
+  });
+
+  it('creates an unfiled note from the command palette', async () => {
+    const user = userEvent.setup();
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'work-note',
+        markdown: '# 仕事',
+        folderId: 'work',
+        updatedAt: '2026-05-27T03:15:00.000Z'
+      }
+    ]);
+    loadNoteFoldersMock.mockResolvedValue([{ id: 'work', name: '仕事' }]);
+    loadNoteTemplatesMock.mockResolvedValue([]);
+    putNoteMock.mockResolvedValue();
+
+    render(<App />);
+
+    await screen.findByRole('option', { name: /仕事/ });
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'コマンド' })).getByRole('button', {
+        name: '新しいNoteを作成'
+      })
+    );
+
+    expect(putNoteMock).toHaveBeenLastCalledWith(expect.objectContaining({ folderId: null }));
+  });
+
+  it('starts note folder creation from the command palette even when the note list is hidden', async () => {
+    const user = userEvent.setup();
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'note',
+        markdown: '# 既存',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      }
+    ]);
+    loadNoteTemplatesMock.mockResolvedValue([]);
+    putNoteMock.mockResolvedValue();
+
+    render(<App />);
+
+    await screen.findByRole('option', { name: /既存/ });
+    await user.click(screen.getByRole('button', { name: 'Note一覧を閉じる' }));
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    await user.click(
+      within(screen.getByRole('dialog', { name: 'コマンド' })).getByRole('button', {
+        name: 'Note folderを作成'
+      })
+    );
+
+    expect(screen.getByRole('textbox', { name: 'Note folder name' })).toBeInTheDocument();
+    expect(window.localStorage.getItem('jot-down-list-nav-collapsed')).toBe('false');
+  });
+
+  it('shows shortcut help across note and template views', async () => {
+    const user = userEvent.setup();
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'note',
+        markdown: '# 既存',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      }
+    ]);
+    loadNoteTemplatesMock.mockResolvedValue([]);
+    putNoteMock.mockResolvedValue();
+
+    render(<App />);
+
+    await screen.findByRole('option', { name: /既存/ });
+
+    expect(screen.getByRole('button', { name: 'ショートカット一覧' })).toBeInTheDocument();
+    expect(screen.getByText('⌘ / Ctrl + K')).toBeInTheDocument();
+    expect(screen.getByText('タスクのチェックを切り替え')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'テンプレート管理' }));
+
+    expect(screen.getByRole('button', { name: 'ショートカット一覧' })).toBeInTheDocument();
+    expect(screen.getByText('⌘ / Ctrl + K')).toBeInTheDocument();
+    expect(screen.queryByText('タスクのチェックを切り替え')).not.toBeInTheDocument();
   });
 
   it('deletes multiple deletion target notes from the note list', async () => {
