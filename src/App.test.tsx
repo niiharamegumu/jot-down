@@ -351,6 +351,27 @@ describe('App', () => {
     expect(screen.getByRole('searchbox', { name: 'Noteを検索' })).toHaveValue('');
   });
 
+  it('closes the command palette when the app-wide shortcut is pressed again', async () => {
+    loadNotesMock.mockResolvedValue([
+      {
+        id: 'note',
+        markdown: '# 既存',
+        updatedAt: '2026-05-26T03:15:00.000Z'
+      }
+    ]);
+    loadNoteTemplatesMock.mockResolvedValue([]);
+
+    render(<App />);
+
+    await screen.findByRole('option', { name: /既存/ });
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    expect(screen.getByRole('dialog', { name: 'コマンド' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    expect(screen.queryByRole('dialog', { name: 'コマンド' })).not.toBeInTheDocument();
+  });
+
   it('creates an unfiled note from the command palette', async () => {
     const user = userEvent.setup();
     loadNotesMock.mockResolvedValue([
