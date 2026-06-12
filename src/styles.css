@@ -518,7 +518,7 @@ h2 {
   inset: 0;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   padding: 1rem;
   background: rgba(0, 0, 0, 0.12);
   -webkit-backdrop-filter: blur(2px);
@@ -526,7 +526,10 @@ h2 {
 }
 
 .command-palette {
+  display: flex;
+  flex-direction: column;
   width: min(40rem, calc(100vw - 2rem));
+  margin-top: max(0px, calc((100vh - 22rem) / 2 - 1rem));
   max-height: min(22rem, calc(100vh - 2rem));
   border: 1px solid rgba(0, 0, 0, 0.04);
   border-radius: 0.95rem;
@@ -571,6 +574,8 @@ h2 {
 }
 
 .command-palette__results {
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: min(19rem, calc(100vh - 5rem));
   padding: 0.3rem 0.3rem 0.3rem;
   overflow: auto;
