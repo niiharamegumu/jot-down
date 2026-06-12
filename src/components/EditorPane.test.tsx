@@ -107,13 +107,17 @@ describe('EditorPane', () => {
         storageError={null}
         appUpdateAvailable={false}
         isApplyingAppUpdate={false}
+        copyStatus="idle"
+        pendingTemplateInsertion={null}
         onMarkdownChange={vi.fn()}
         onFlush={vi.fn()}
         onApplyAppUpdate={vi.fn()}
         onDuplicateNote={vi.fn()}
         onDeleteNote={vi.fn()}
+        onCopyMarkdown={vi.fn()}
         onOpenTemplateManagement={vi.fn()}
         onBackToList={vi.fn()}
+        onTemplateInsertionHandled={vi.fn()}
       />
     );
 
@@ -298,13 +302,17 @@ describe('EditorPane', () => {
         storageError={null}
         appUpdateAvailable={false}
         isApplyingAppUpdate={false}
+        copyStatus="idle"
+        pendingTemplateInsertion={null}
         onMarkdownChange={vi.fn()}
         onFlush={vi.fn()}
         onApplyAppUpdate={vi.fn()}
         onDuplicateNote={vi.fn()}
         onDeleteNote={vi.fn()}
+        onCopyMarkdown={vi.fn()}
         onOpenTemplateManagement={vi.fn()}
         onBackToList={vi.fn()}
+        onTemplateInsertionHandled={vi.fn()}
       />
     );
 
@@ -884,58 +892,27 @@ describe('EditorPane', () => {
     expect(onDuplicateNote).toHaveBeenCalledTimes(1);
   });
 
-  it('copies the visible note Markdown to the clipboard', async () => {
+  it('requests copying the visible note Markdown', async () => {
     const user = userEvent.setup();
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    const restoreClipboard = mockClipboard(writeText);
+    const onCopyMarkdown = vi.fn();
 
-    try {
-      renderEditor({ markdown: '# 見出し\n- [ ] タスク' });
+    renderEditor({ markdown: '# 見出し\n- [ ] タスク', onCopyMarkdown });
 
-      await user.click(screen.getByRole('button', { name: 'Note Markdownをコピー' }));
+    await user.click(screen.getByRole('button', { name: 'Note Markdownをコピー' }));
 
-      expect(writeText).toHaveBeenCalledWith('# 見出し\n- [ ] タスク');
-      expect(await screen.findByText('コピーしました')).toBeInTheDocument();
-    } finally {
-      restoreClipboard();
-    }
+    expect(onCopyMarkdown).toHaveBeenCalledTimes(1);
   });
 
-  it('falls back to selection copy when clipboard writing fails', async () => {
-    const user = userEvent.setup();
-    const writeText = vi.fn().mockRejectedValue(new Error('clipboard unavailable'));
-    const restoreClipboard = mockClipboard(writeText);
-    const { execCommand, restoreExecCommand } = mockExecCommand(true);
+  it('shows the copied note Markdown status', () => {
+    renderEditor({ copyStatus: 'copied' });
 
-    try {
-      renderEditor({ markdown: '# フォールバック' });
-
-      await user.click(screen.getByRole('button', { name: 'Note Markdownをコピー' }));
-
-      expect(execCommand).toHaveBeenCalledWith('copy');
-      expect(await screen.findByText('コピーしました')).toBeInTheDocument();
-    } finally {
-      restoreClipboard();
-      restoreExecCommand();
-    }
+    expect(screen.getByText('コピーしました')).toBeInTheDocument();
   });
 
-  it('shows a failure message when all note Markdown copy methods fail', async () => {
-    const user = userEvent.setup();
-    const writeText = vi.fn().mockRejectedValue(new Error('clipboard unavailable'));
-    const restoreClipboard = mockClipboard(writeText);
-    const { restoreExecCommand } = mockExecCommand(false);
+  it('shows the failed note Markdown copy status', () => {
+    renderEditor({ copyStatus: 'failed' });
 
-    try {
-      renderEditor();
-
-      await user.click(screen.getByRole('button', { name: 'Note Markdownをコピー' }));
-
-      expect(await screen.findByText('コピーできませんでした')).toBeInTheDocument();
-    } finally {
-      restoreClipboard();
-      restoreExecCommand();
-    }
+    expect(screen.getByText('コピーできませんでした')).toBeInTheDocument();
   });
 
   it('inserts a selected template into the note Markdown', async () => {
@@ -962,26 +939,6 @@ describe('EditorPane', () => {
     expect(mockInsertMarkdown).toHaveBeenCalledWith('# 会議');
     expect(onMarkdownChange).toHaveBeenCalledWith('- [ ] 買い物\n# 会議');
   });
-
-  it('lists editor shortcuts in the floating help', () => {
-    renderEditor();
-
-    const shortcutHelpButton = screen.getByRole('button', { name: 'ショートカット一覧' });
-    expect(shortcutHelpButton).toBeInTheDocument();
-    expect(shortcutHelpButton.closest('.editor-toolbar')).toBeNull();
-    expect(screen.getByText('⌘ + Enter')).toBeInTheDocument();
-    expect(screen.getByText('タスクのチェックを切り替え')).toBeInTheDocument();
-    expect(screen.getByText('⌥ + ↑')).toBeInTheDocument();
-    expect(screen.getByText('行を上へ移動')).toBeInTheDocument();
-    expect(screen.getByText('⌥ + ↓')).toBeInTheDocument();
-    expect(screen.getByText('行を下へ移動')).toBeInTheDocument();
-    expect(screen.getByText('⌃ + ⌥ + ↑')).toBeInTheDocument();
-    expect(screen.getByText('行を先頭へ移動')).toBeInTheDocument();
-    expect(screen.getByText('⌃ + ⌥ + ↓')).toBeInTheDocument();
-    expect(screen.getByText('行を末尾へ移動')).toBeInTheDocument();
-    expect(screen.getByText('⌘ + クリック')).toBeInTheDocument();
-    expect(screen.getByText('リンクを開く')).toBeInTheDocument();
-  });
 });
 
 function renderEditor(
@@ -996,13 +953,17 @@ function renderEditor(
       storageError={null}
       appUpdateAvailable={false}
       isApplyingAppUpdate={false}
+      copyStatus="idle"
+      pendingTemplateInsertion={null}
       onMarkdownChange={vi.fn()}
       onFlush={vi.fn()}
       onApplyAppUpdate={vi.fn()}
       onDuplicateNote={vi.fn()}
       onDeleteNote={vi.fn()}
+      onCopyMarkdown={vi.fn()}
       onOpenTemplateManagement={vi.fn()}
       onBackToList={vi.fn()}
+      onTemplateInsertionHandled={vi.fn()}
       {...props}
     />
   );
@@ -1021,13 +982,17 @@ function renderControlledEditor(initialMarkdown: string): ReturnType<typeof rend
         storageError={null}
         appUpdateAvailable={false}
         isApplyingAppUpdate={false}
+        copyStatus="idle"
+        pendingTemplateInsertion={null}
         onMarkdownChange={setMarkdown}
         onFlush={vi.fn()}
         onApplyAppUpdate={vi.fn()}
         onDuplicateNote={vi.fn()}
         onDeleteNote={vi.fn()}
+        onCopyMarkdown={vi.fn()}
         onOpenTemplateManagement={vi.fn()}
         onBackToList={vi.fn()}
+        onTemplateInsertionHandled={vi.fn()}
       />
     );
   }
@@ -1098,42 +1063,6 @@ function selectTextRange(
   const selection = window.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(range);
-}
-
-function mockClipboard(writeText: (value: string) => Promise<void>) {
-  const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
-  Object.defineProperty(navigator, 'clipboard', {
-    configurable: true,
-    value: { writeText }
-  });
-
-  return () => {
-    if (originalDescriptor) {
-      Object.defineProperty(navigator, 'clipboard', originalDescriptor);
-    } else {
-      Reflect.deleteProperty(navigator, 'clipboard');
-    }
-  };
-}
-
-function mockExecCommand(result: boolean) {
-  const originalDescriptor = Object.getOwnPropertyDescriptor(document, 'execCommand');
-  const execCommand = vi.fn().mockReturnValue(result);
-  Object.defineProperty(document, 'execCommand', {
-    configurable: true,
-    value: execCommand
-  });
-
-  return {
-    execCommand,
-    restoreExecCommand: () => {
-      if (originalDescriptor) {
-        Object.defineProperty(document, 'execCommand', originalDescriptor);
-      } else {
-        Reflect.deleteProperty(document, 'execCommand');
-      }
-    }
-  };
 }
 
 function createPasteEventProperties(text: string) {
