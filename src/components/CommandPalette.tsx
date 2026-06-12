@@ -51,6 +51,7 @@ export function CommandPalette({
   const [mode, setMode] = useState<CommandPaletteMode>('default');
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const folderNameById = useMemo(
     () => new Map(noteFolders.map((folder) => [folder.id, folder.name])),
     [noteFolders]
@@ -143,6 +144,22 @@ export function CommandPalette({
     setActiveIndex(Math.max(visibleItems.length - 1, 0));
   }, [activeIndex, visibleItems.length]);
 
+  useEffect(() => {
+    if (!open || visibleItems.length === 0) {
+      return;
+    }
+
+    const resultsElement = resultsRef.current;
+    const activeElement = resultsElement?.querySelector<HTMLElement>(
+      `[data-command-palette-item-index="${activeIndex}"]`
+    );
+    if (!resultsElement || !activeElement) {
+      return;
+    }
+
+    scrollItemIntoResultsView(resultsElement, activeElement);
+  }, [activeIndex, open, visibleItems.length]);
+
   if (!open) {
     return null;
   }
@@ -181,7 +198,7 @@ export function CommandPalette({
           />
         </label>
 
-        <div className="command-palette__results">
+        <div ref={resultsRef} className="command-palette__results">
           {visibleNotes.length > 0 ? (
             <CommandPaletteGroup
               title="開く"
@@ -316,6 +333,7 @@ function CommandPaletteGroup({
               className={`command-palette__item command-palette__item--${item.type}`}
               type="button"
               aria-selected={active}
+              data-command-palette-item-index={itemIndex}
               onMouseEnter={() => onActivate(itemIndex)}
               onClick={() => onSelect(item)}
             >
@@ -350,6 +368,21 @@ function CommandPaletteGroup({
       </div>
     </section>
   );
+}
+
+function scrollItemIntoResultsView(resultsElement: HTMLElement, activeElement: HTMLElement) {
+  const scrollMargin = 4;
+  const resultsRect = resultsElement.getBoundingClientRect();
+  const activeRect = activeElement.getBoundingClientRect();
+
+  if (activeRect.top < resultsRect.top) {
+    resultsElement.scrollTop -= resultsRect.top - activeRect.top + scrollMargin;
+    return;
+  }
+
+  if (activeRect.bottom > resultsRect.bottom) {
+    resultsElement.scrollTop += activeRect.bottom - resultsRect.bottom + scrollMargin;
+  }
 }
 
 function CommandPaletteItemIcon({ type, id }: { type: CommandPaletteItem['type']; id: string }) {
