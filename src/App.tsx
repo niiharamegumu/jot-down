@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { CommandPalette, type CommandPaletteAction } from './components/CommandPalette';
 import { EditorPane } from './components/EditorPane';
 import { NoteList } from './components/NoteList';
+import { ShortcutHelp } from './components/ShortcutHelp';
 import { TemplateManager } from './components/TemplateManager';
 import {
   deleteNote,
@@ -89,6 +91,13 @@ export function App() {
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [isInstalledPwa, setIsInstalledPwa] = useState(() => isRunningAsInstalledPwa());
   const [isApplyingAppUpdate, setIsApplyingAppUpdate] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [pendingTemplateInsertion, setPendingTemplateInsertion] = useState<{
+    requestId: number;
+    markdown: string;
+  } | null>(null);
+  const templateInsertionRequestIdRef = useRef(0);
   const shellRef = useRef<HTMLDivElement>(null);
   const listNavElementRef = useRef<HTMLElement | null>(null);
   const resizePointerIdRef = useRef<number | null>(null);
@@ -115,6 +124,11 @@ export function App() {
   const applicableTemplates = getApplicableNoteTemplates(noteTemplates);
   const effectiveListNavCollapsed = isListNavCollapsed && !isSmallScreen;
   const canToggleListNav = !isSmallScreen;
+  const isNoteEditorVisible =
+    appView === 'notes' && selectedNote !== null && (!isSmallScreen || mobileView === 'editor');
+  const commandPaletteNotes = notes.map((note) =>
+    note.id === selectedNoteId ? { ...note, markdown: activeMarkdown } : note
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -325,6 +339,30 @@ export function App() {
       window.removeEventListener('pointercancel', hideListNavPeek);
     };
   }, [draggedNoteIds.length, effectiveListNavCollapsed, isListNavPeeking]);
+
+  useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if ((!event.metaKey && !event.ctrlKey) || event.altKey || event.key.toLowerCase() !== 'k') {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      setIsCommandPaletteOpen(true);
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, []);
+
+  useEffect(() => {
+    if (copyStatus === 'idle') {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setCopyStatus('idle'), 2200);
+    return () => window.clearTimeout(timeoutId);
+  }, [copyStatus]);
 
   const setListNavElementRef = useCallback((element: HTMLElement | null) => {
     listNavElementRef.current = element;
@@ -923,140 +961,376 @@ export function App() {
     setAppView('templates');
   }
 
+  async function handleCopyActiveNoteMarkdown() {
+    const copied = await copyTextToClipboard(activeMarkdown);
+    setCopyStatus(copied ? 'copied' : 'failed');
+  }
+
+  function closeCommandPalette() {
+    setIsCommandPaletteOpen(false);
+  }
+
+  async function handleCommandPaletteOpenNote(noteId: string) {
+    closeCommandPalette();
+    if (appView === 'templates') {
+      await persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
+    } else {
+      await persistActiveNote(activeMarkdown);
+    }
+
+    const note = commandPaletteNotes.find((item) => item.id === noteId);
+    if (!note) {
+      return;
+    }
+
+    openNote(note);
+    setAppView('notes');
+    setMobileView('editor');
+  }
+
+  async function handleCommandPaletteCreateNote() {
+    closeCommandPalette();
+    if (appView === 'templates') {
+      await persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
+    }
+
+    setAppView('notes');
+    await handleCreateNote(null);
+  }
+
+  function handleCommandPaletteCreateNoteFolder() {
+    closeCommandPalette();
+    setAppView('notes');
+    setMobileView('list');
+    if (!isSmallScreen) {
+      setIsListNavCollapsed(false);
+      window.localStorage.setItem(listNavCollapsedStorageKey, 'false');
+    }
+    setIsListNavPeeking(false);
+    handleStartCreateNoteFolder();
+  }
+
+  async function handleCommandPaletteCreateTemplate() {
+    closeCommandPalette();
+    if (appView === 'notes') {
+      await persistActiveNote(activeMarkdown);
+    }
+
+    setAppView('templates');
+    await handleCreateTemplate();
+  }
+
+  function handleCommandPaletteInsertTemplate(templateId: string) {
+    const template = applicableTemplates.find((item) => item.id === templateId);
+    if (!template) {
+      return;
+    }
+
+    closeCommandPalette();
+    setAppView('notes');
+    setMobileView('editor');
+    templateInsertionRequestIdRef.current += 1;
+    setPendingTemplateInsertion({
+      requestId: templateInsertionRequestIdRef.current,
+      markdown: template.markdown
+    });
+  }
+
+  function handleTemplateInsertionHandled(requestId: number) {
+    setPendingTemplateInsertion((currentInsertion) =>
+      currentInsertion?.requestId === requestId ? null : currentInsertion
+    );
+  }
+
+  function showListNav() {
+    if (isSmallScreen) {
+      return;
+    }
+
+    setIsListNavCollapsed(false);
+    window.localStorage.setItem(listNavCollapsedStorageKey, 'false');
+    setIsListNavPeeking(false);
+  }
+
+  function hideListNav() {
+    if (isSmallScreen) {
+      return;
+    }
+
+    setIsListNavCollapsed(true);
+    window.localStorage.setItem(listNavCollapsedStorageKey, 'true');
+    setIsListNavPeeking(false);
+  }
+
+  const commandPaletteActions: CommandPaletteAction[] = [
+    {
+      id: 'create-note',
+      label: '新しいNoteを作成',
+      aliases: ['new', 'note', 'create'],
+      run: () => void handleCommandPaletteCreateNote()
+    },
+    {
+      id: 'open-note-lookup',
+      label: 'Noteを探して開く',
+      aliases: ['open', 'find', 'search', 'note'],
+      run: () => undefined
+    },
+    {
+      id: 'create-note-folder',
+      label: 'Note folderを作成',
+      aliases: ['folder', 'new folder', 'create folder'],
+      run: handleCommandPaletteCreateNoteFolder
+    },
+    ...(isNoteEditorVisible && applicableTemplates.length > 0
+      ? [
+          {
+            id: 'insert-template',
+            label: 'テンプレートを挿入',
+            aliases: ['template', 'insert', 'snippet'],
+            run: () => undefined
+          }
+        ]
+      : []),
+    {
+      id: 'open-template-management',
+      label: 'テンプレート管理を開く',
+      aliases: ['template', 'templates', 'manage'],
+      run: () => {
+        closeCommandPalette();
+        openTemplateManagement();
+      }
+    },
+    {
+      id: 'create-template',
+      label: '新しいテンプレートを作成',
+      aliases: ['new template', 'template', 'create'],
+      run: () => void handleCommandPaletteCreateTemplate()
+    },
+    ...(isNoteEditorVisible
+      ? [
+          {
+            id: 'duplicate-note',
+            label: '現在のNoteを複製',
+            aliases: ['duplicate', 'copy note'],
+            run: () => {
+              closeCommandPalette();
+              void handleDuplicateNote();
+            }
+          },
+          {
+            id: 'copy-note-markdown',
+            label: '現在のNote Markdownをコピー',
+            aliases: ['copy', 'markdown'],
+            run: () => {
+              closeCommandPalette();
+              void handleCopyActiveNoteMarkdown();
+            }
+          },
+          {
+            id: 'delete-note',
+            label: '現在のNoteを削除',
+            aliases: ['delete', 'remove'],
+            run: () => {
+              closeCommandPalette();
+              void handleDeleteNote();
+            }
+          }
+        ]
+      : []),
+    ...(!isSmallScreen && effectiveListNavCollapsed
+      ? [
+          {
+            id: 'show-list-nav',
+            label: 'Note一覧を表示',
+            aliases: ['show list', 'sidebar', 'navigation'],
+            run: () => {
+              closeCommandPalette();
+              showListNav();
+            }
+          }
+        ]
+      : []),
+    ...(!isSmallScreen && !effectiveListNavCollapsed
+      ? [
+          {
+            id: 'hide-list-nav',
+            label: 'Note一覧を隠す',
+            aliases: ['hide list', 'sidebar', 'navigation'],
+            run: () => {
+              closeCommandPalette();
+              hideListNav();
+            }
+          }
+        ]
+      : [])
+  ];
+
   if (appView === 'templates') {
     return (
-      <TemplateManager
-        templates={noteTemplates.map((template) =>
-          template.id === selectedTemplateId
-            ? { ...template, name: activeTemplateName, markdown: activeTemplateMarkdown }
-            : template
-        )}
-        selectedTemplateId={selectedTemplateId}
-        mobileView={templateMobileView}
-        sidebarWidth={sidebarWidth}
-        isSmallScreen={isSmallScreen}
-        canToggleListNav={canToggleListNav}
-        isListNavCollapsed={effectiveListNavCollapsed}
-        isListNavPeeking={isListNavPeeking}
-        isResizingSidebar={isResizingSidebar}
-        listNavRef={setListNavElementRef}
-        storageError={storageError}
-        onCreateTemplate={handleCreateTemplate}
-        onSelectTemplate={handleSelectTemplate}
-        onChangeTemplateName={handleTemplateNameChange}
-        onChangeTemplateMarkdown={handleTemplateMarkdownChange}
-        onFlush={() => void persistActiveTemplate(activeTemplateName, activeTemplateMarkdown)}
-        onDeleteTemplate={handleDeleteTemplate}
-        onCreateNoteFromTemplate={handleCreateNoteFromTemplate}
-        onResizePointerDown={handleResizePointerDown}
-        onResizeKeyDown={(direction) =>
-          commitSidebarWidth(sidebarWidth + (direction === 'wider' ? 16 : -16))
-        }
-        onBackToNotes={() => {
-          void persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
-          setAppView('notes');
-          setMobileView('list');
-        }}
-        onBackToTemplateList={() => {
-          void persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
-          setTemplateMobileView('list');
-        }}
-        onToggleListNav={toggleListNav}
-        onPeekListNav={() => setIsListNavPeeking(true)}
-        onHideListNavPeek={() => setIsListNavPeeking(false)}
-      />
+      <>
+        <TemplateManager
+          templates={noteTemplates.map((template) =>
+            template.id === selectedTemplateId
+              ? { ...template, name: activeTemplateName, markdown: activeTemplateMarkdown }
+              : template
+          )}
+          selectedTemplateId={selectedTemplateId}
+          mobileView={templateMobileView}
+          sidebarWidth={sidebarWidth}
+          isSmallScreen={isSmallScreen}
+          canToggleListNav={canToggleListNav}
+          isListNavCollapsed={effectiveListNavCollapsed}
+          isListNavPeeking={isListNavPeeking}
+          isResizingSidebar={isResizingSidebar}
+          listNavRef={setListNavElementRef}
+          storageError={storageError}
+          onCreateTemplate={handleCreateTemplate}
+          onSelectTemplate={handleSelectTemplate}
+          onChangeTemplateName={handleTemplateNameChange}
+          onChangeTemplateMarkdown={handleTemplateMarkdownChange}
+          onFlush={() => void persistActiveTemplate(activeTemplateName, activeTemplateMarkdown)}
+          onDeleteTemplate={handleDeleteTemplate}
+          onCreateNoteFromTemplate={handleCreateNoteFromTemplate}
+          onResizePointerDown={handleResizePointerDown}
+          onResizeKeyDown={(direction) =>
+            commitSidebarWidth(sidebarWidth + (direction === 'wider' ? 16 : -16))
+          }
+          onBackToNotes={() => {
+            void persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
+            setAppView('notes');
+            setMobileView('list');
+          }}
+          onBackToTemplateList={() => {
+            void persistActiveTemplate(activeTemplateName, activeTemplateMarkdown);
+            setTemplateMobileView('list');
+          }}
+          onToggleListNav={toggleListNav}
+          onPeekListNav={() => setIsListNavPeeking(true)}
+          onHideListNavPeek={() => setIsListNavPeeking(false)}
+        />
+        {isCommandPaletteOpen ? null : <ShortcutHelp showNoteEditingShortcuts={false} />}
+        <CommandPalette
+          open={isCommandPaletteOpen}
+          notes={commandPaletteNotes}
+          noteFolders={noteFolders}
+          actions={commandPaletteActions}
+          templates={applicableTemplates}
+          onOpenNote={(noteId) => void handleCommandPaletteOpenNote(noteId)}
+          onInsertTemplate={handleCommandPaletteInsertTemplate}
+          onClose={closeCommandPalette}
+        />
+      </>
     );
   }
 
   return (
-    <div
-      ref={shellRef}
-      className={`app-shell app-shell--${mobileView}${effectiveListNavCollapsed ? ' app-shell--list-nav-collapsed' : ''}${isListNavPeeking ? ' app-shell--list-nav-peeking' : ''}${isResizingSidebar ? ' app-shell--resizing' : ''}`}
-      style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
-    >
-      {canToggleListNav && effectiveListNavCollapsed ? (
-        <div
-          className="list-nav-peek-zone"
-          aria-hidden="true"
-          onMouseEnter={() => setIsListNavPeeking(true)}
+    <>
+      <div
+        ref={shellRef}
+        className={`app-shell app-shell--${mobileView}${effectiveListNavCollapsed ? ' app-shell--list-nav-collapsed' : ''}${isListNavPeeking ? ' app-shell--list-nav-peeking' : ''}${isResizingSidebar ? ' app-shell--resizing' : ''}`}
+        style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}
+      >
+        {canToggleListNav && effectiveListNavCollapsed ? (
+          <div
+            className="list-nav-peek-zone"
+            aria-hidden="true"
+            onMouseEnter={() => setIsListNavPeeking(true)}
+          />
+        ) : null}
+        <NoteList
+          notes={visibleNotes}
+          noteFolders={noteFolders}
+          selectedNoteId={selectedNoteId}
+          deletionTargetNoteIds={deletionTargetNoteIds}
+          membershipChangeNoteIds={membershipChangeNoteIds}
+          openNoteFolderIds={openNoteFolderIds}
+          noteFolderEditor={noteFolderEditor}
+          isNoteDragging={draggedNoteIds.length > 0}
+          isDeletionTargetSelectionMode={isDeletionTargetSelectionMode}
+          query={query}
+          canToggleListNav={canToggleListNav}
+          isListNavCollapsed={effectiveListNavCollapsed}
+          listNavRef={setListNavElementRef}
+          onQueryChange={handleQueryChange}
+          onCreateNote={handleCreateNote}
+          onStartCreateNoteFolder={handleStartCreateNoteFolder}
+          onSelectNote={handleSelectNote}
+          onStartDeletionTargetSelection={handleStartDeletionTargetSelection}
+          onToggleDeletionTarget={handleToggleDeletionTarget}
+          onToggleMembershipChangeNote={handleToggleMembershipChangeNote}
+          onDragNote={handleDragNote}
+          onFinishNoteDrag={handleFinishNoteDrag}
+          onMoveDraggedNotesToFolder={handleMoveDraggedNotesToFolder}
+          onToggleNoteFolderOpen={handleToggleNoteFolderOpen}
+          onStartRenameNoteFolder={handleStartRenameNoteFolder}
+          onChangeNoteFolderEditorName={handleChangeNoteFolderEditorName}
+          onSubmitNoteFolderEditor={handleSubmitNoteFolderEditor}
+          onCancelNoteFolderEditor={handleCancelNoteFolderEditor}
+          onDeleteNoteFolder={handleDeleteNoteFolder}
+          onDeleteDeletionTargets={handleDeleteDeletionTargets}
+          onCancelDeletionTargetSelection={handleCancelDeletionTargetSelection}
+          onOpenTemplateManagement={openTemplateManagement}
+          onToggleListNav={toggleListNav}
+          onHideListNavPeek={() => setIsListNavPeeking(false)}
         />
-      ) : null}
-      <NoteList
-        notes={visibleNotes}
+        {canToggleListNav && !effectiveListNavCollapsed ? (
+          <div
+            className="pane-resizer"
+            role="separator"
+            aria-label="Note一覧の幅を変更"
+            aria-orientation="vertical"
+            aria-valuemin={minSidebarWidth}
+            aria-valuemax={maxSidebarWidth}
+            aria-valuenow={sidebarWidth}
+            tabIndex={0}
+            onPointerDown={handleResizePointerDown}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                commitSidebarWidth(sidebarWidth - 16);
+              }
+              if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                commitSidebarWidth(sidebarWidth + 16);
+              }
+            }}
+          />
+        ) : null}
+        <EditorPane
+          note={selectedNote}
+          markdown={activeMarkdown}
+          updatedAt={selectedNote?.updatedAt ?? null}
+          applicableTemplates={applicableTemplates}
+          storageError={storageError}
+          appUpdateAvailable={isInstalledPwa && needRefresh}
+          isApplyingAppUpdate={isApplyingAppUpdate}
+          copyStatus={copyStatus}
+          pendingTemplateInsertion={pendingTemplateInsertion}
+          onMarkdownChange={handleMarkdownChange}
+          onFlush={() => void persistActiveNote(activeMarkdown)}
+          onApplyAppUpdate={handleApplyAppUpdate}
+          onDuplicateNote={handleDuplicateNote}
+          onDeleteNote={handleDeleteNote}
+          onCopyMarkdown={() => void handleCopyActiveNoteMarkdown()}
+          onOpenTemplateManagement={openTemplateManagement}
+          onBackToList={() => setMobileView('list')}
+          onTemplateInsertionHandled={handleTemplateInsertionHandled}
+        />
+      </div>
+      {isCommandPaletteOpen ? null : (
+        <ShortcutHelp showNoteEditingShortcuts={isNoteEditorVisible} />
+      )}
+      <CommandPalette
+        open={isCommandPaletteOpen}
+        notes={commandPaletteNotes}
         noteFolders={noteFolders}
-        selectedNoteId={selectedNoteId}
-        deletionTargetNoteIds={deletionTargetNoteIds}
-        membershipChangeNoteIds={membershipChangeNoteIds}
-        openNoteFolderIds={openNoteFolderIds}
-        noteFolderEditor={noteFolderEditor}
-        isNoteDragging={draggedNoteIds.length > 0}
-        isDeletionTargetSelectionMode={isDeletionTargetSelectionMode}
-        query={query}
-        canToggleListNav={canToggleListNav}
-        isListNavCollapsed={effectiveListNavCollapsed}
-        listNavRef={setListNavElementRef}
-        onQueryChange={handleQueryChange}
-        onCreateNote={handleCreateNote}
-        onStartCreateNoteFolder={handleStartCreateNoteFolder}
-        onSelectNote={handleSelectNote}
-        onStartDeletionTargetSelection={handleStartDeletionTargetSelection}
-        onToggleDeletionTarget={handleToggleDeletionTarget}
-        onToggleMembershipChangeNote={handleToggleMembershipChangeNote}
-        onDragNote={handleDragNote}
-        onFinishNoteDrag={handleFinishNoteDrag}
-        onMoveDraggedNotesToFolder={handleMoveDraggedNotesToFolder}
-        onToggleNoteFolderOpen={handleToggleNoteFolderOpen}
-        onStartRenameNoteFolder={handleStartRenameNoteFolder}
-        onChangeNoteFolderEditorName={handleChangeNoteFolderEditorName}
-        onSubmitNoteFolderEditor={handleSubmitNoteFolderEditor}
-        onCancelNoteFolderEditor={handleCancelNoteFolderEditor}
-        onDeleteNoteFolder={handleDeleteNoteFolder}
-        onDeleteDeletionTargets={handleDeleteDeletionTargets}
-        onCancelDeletionTargetSelection={handleCancelDeletionTargetSelection}
-        onOpenTemplateManagement={openTemplateManagement}
-        onToggleListNav={toggleListNav}
-        onHideListNavPeek={() => setIsListNavPeeking(false)}
+        actions={commandPaletteActions}
+        templates={applicableTemplates}
+        onOpenNote={(noteId) => void handleCommandPaletteOpenNote(noteId)}
+        onInsertTemplate={handleCommandPaletteInsertTemplate}
+        onClose={closeCommandPalette}
       />
-      {canToggleListNav && !effectiveListNavCollapsed ? (
-        <div
-          className="pane-resizer"
-          role="separator"
-          aria-label="Note一覧の幅を変更"
-          aria-orientation="vertical"
-          aria-valuemin={minSidebarWidth}
-          aria-valuemax={maxSidebarWidth}
-          aria-valuenow={sidebarWidth}
-          tabIndex={0}
-          onPointerDown={handleResizePointerDown}
-          onKeyDown={(event) => {
-            if (event.key === 'ArrowLeft') {
-              event.preventDefault();
-              commitSidebarWidth(sidebarWidth - 16);
-            }
-            if (event.key === 'ArrowRight') {
-              event.preventDefault();
-              commitSidebarWidth(sidebarWidth + 16);
-            }
-          }}
-        />
-      ) : null}
-      <EditorPane
-        note={selectedNote}
-        markdown={activeMarkdown}
-        updatedAt={selectedNote?.updatedAt ?? null}
-        applicableTemplates={applicableTemplates}
-        storageError={storageError}
-        appUpdateAvailable={isInstalledPwa && needRefresh}
-        isApplyingAppUpdate={isApplyingAppUpdate}
-        onMarkdownChange={handleMarkdownChange}
-        onFlush={() => void persistActiveNote(activeMarkdown)}
-        onApplyAppUpdate={handleApplyAppUpdate}
-        onDuplicateNote={handleDuplicateNote}
-        onDeleteNote={handleDeleteNote}
-        onOpenTemplateManagement={openTemplateManagement}
-        onBackToList={() => setMobileView('list')}
-      />
-    </div>
+    </>
   );
 
   function handleResizePointerDown(event: PointerEvent<HTMLDivElement>) {
@@ -1210,4 +1484,48 @@ function isRunningAsInstalledPwa(): boolean {
     window.matchMedia('(display-mode: standalone)').matches ||
     standaloneNavigator.standalone === true
   );
+}
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (navigator.clipboard) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return copyTextUsingSelection(text);
+    }
+  }
+
+  return copyTextUsingSelection(text);
+}
+
+function copyTextUsingSelection(text: string): boolean {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.top = '0';
+  textarea.style.left = '-9999px';
+  textarea.style.opacity = '0';
+
+  const selection = document.getSelection();
+  const previousRange =
+    selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
+
+  document.body.append(textarea);
+  textarea.select();
+
+  try {
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    textarea.remove();
+    if (selection) {
+      selection.removeAllRanges();
+      if (previousRange) {
+        selection.addRange(previousRange);
+      }
+    }
+  }
 }

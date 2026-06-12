@@ -263,6 +263,7 @@ export function TemplateManager({
                 <label className="template-name-field">
                   <span className="visually-hidden">テンプレート名</span>
                   <input
+                    autoFocus={!selectedTemplate.name.trim()}
                     value={selectedTemplate.name}
                     onChange={(event) => onChangeTemplateName(event.currentTarget.value)}
                     onBlur={onFlush}
