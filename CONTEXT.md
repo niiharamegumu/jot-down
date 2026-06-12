@@ -12,6 +12,10 @@ _Avoid_: Forced refresh, automatic reload, program update
 The expectation that note and note template changes are kept without a user-facing save action, using prompt background persistence after edits and when editing focus is left. Save failures should be visible without discarding the user's current note or note template text.
 _Avoid_: Save button, draft state, persistent saved indicator
 
+**Command palette**:
+A keyboard-first app-wide alternate entry point for finding and opening notes and for executing existing note, note template, navigation, and editor actions without making the user first move to the visible control that normally owns the action. Command palette lookup may overlap with note search and other visible controls, but it does not change the underlying meaning of those actions. A command palette executes user-facing actions that already belong to Jot Down, and it does not create a separate settings surface, automation system, task lookup, or structured query language.
+_Avoid_: Settings screen, automation, task command center, structured query, plugin system, separate action model
+
 **Local note store**:
 The browser-resident place where notes and note templates are kept for offline use on the current device. Each device has its own local note store; it has no user account owner, is expected to retain notes and note templates during normal use of that browser, and does not include cross-tab conflict resolution, user-managed Markdown files, or synced cloud storage. If the local note store is unavailable, the app should make saving unavailable clear rather than pretending notes or note templates can be kept.
 _Avoid_: Local folder, cloud sync, file vault, account, import/export
@@ -28,16 +32,16 @@ _Avoid_: Last edited note, pinned note, default note
 A single editing surface where Markdown text remains the source of truth while task markers and headings are visually structured in place as the user types. Editing behavior follows the Markdown editor's native list and task semantics rather than preserving app-specific empty task states, while focused blocks must keep their visual scale and layout stable enough that cursor placement does not cause distracting typography or position shifts. Familiar desktop text selection, including multi-click selection, should remain available in the editing surface unless the user intentionally activates a first-class structure control such as a task checkbox.
 _Avoid_: Separate preview, rendered-only document, edit/preview mode, layout-shifting focus state, block-type menu, app-specific text selection mode
 
-**Editor shortcut help**:
-A supplemental note editor control that shows available keyboard and pointer shortcuts without changing note content. Editor shortcut help belongs outside the primary note toolbar so the toolbar remains focused on note actions.
-_Avoid_: Note action, formatting toolbar, settings
+**Shortcut help**:
+A supplemental app-wide control that shows available keyboard and pointer shortcuts without changing note or note template content. Shortcut help includes the command palette shortcut and may include screen-specific shortcuts such as note line movement or task toggling when those shortcuts are available. Shortcut help belongs outside primary action toolbars so those toolbars remain focused on note, note template, or navigation actions.
+_Avoid_: Note action, formatting toolbar, settings, command palette
 
 **Note**:
 The user-facing unit of writing. A user can have multiple notes, and each note contains Markdown text, including any tasks written inside it.
 _Avoid_: Document, page, list
 
 **Note creation**:
-An action that creates a new note in the user's current note list context. Creating a note from within a note folder group places it in that note folder; creating a note from outside a note folder group creates an unfiled note.
+An action that creates a new note in the user's current note list context. Creating a note from within a note folder group places it in that note folder; creating a note from outside a note folder group creates an unfiled note. Creating a note from the command palette creates an unfiled note because the command palette is an app-wide entry point rather than a note folder group action.
 _Avoid_: File creation, template application
 
 **Note line**:
