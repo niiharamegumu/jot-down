@@ -526,8 +526,8 @@ h2 {
 }
 
 .command-palette {
-  width: min(28rem, calc(100vw - 2rem));
-  max-height: min(18.5rem, calc(100vh - 2rem));
+  width: min(40rem, calc(100vw - 2rem));
+  max-height: min(22rem, calc(100vh - 2rem));
   border: 1px solid rgba(0, 0, 0, 0.04);
   border-radius: 0.95rem;
   background: rgba(255, 255, 255, 0.94);
@@ -571,7 +571,7 @@ h2 {
 }
 
 .command-palette__results {
-  max-height: min(15.5rem, calc(100vh - 5rem));
+  max-height: min(19rem, calc(100vh - 5rem));
   padding: 0.3rem 0.3rem 0.3rem;
   overflow: auto;
 }
@@ -681,7 +681,7 @@ h2 {
   position: relative;
   display: inline-flex;
   min-width: 0;
-  max-width: 9.5rem;
+  max-width: 14rem;
   border-radius: 999px;
   padding: 0.1rem 0.4rem;
   color: #777777;
