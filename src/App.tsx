@@ -348,7 +348,7 @@ export function App() {
 
       event.preventDefault();
       event.stopPropagation();
-      setIsCommandPaletteOpen(true);
+      setIsCommandPaletteOpen((isOpen) => !isOpen);
     }
 
     window.addEventListener('keydown', handleKeyDown, true);
